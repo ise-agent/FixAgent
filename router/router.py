@@ -1,26 +1,21 @@
 """
 Router functions for agent workflow
 """
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from ..agent.state import AgentState
-else:
-    # Import for runtime usage
-    from agent.state import AgentState
+from langchain_core.messages import HumanMessage,AIMessage
+
+from agent.state import AgentState
 
 
 def is_tool_result_message(message):
     """Check if message is a tool result message"""
-    from langchain_core.messages import HumanMessage
     return isinstance(message, HumanMessage) and message.content.startswith(
-        "// Tool Result:"
+        "/\/ Tool Result:"
     )
 
 
 def locator_router(state: "AgentState"):
     """Router for locator agent"""
-    from langchain_core.messages import AIMessage, HumanMessage
 
     messages = state["messages"]
     last_message = messages[-1]
@@ -46,7 +41,6 @@ def locator_router(state: "AgentState"):
 
 def suggester_router(state: "AgentState"):
     """Router for suggester agent"""
-    from langchain_core.messages import AIMessage, HumanMessage
 
     messages = state["messages"]
     last_message = messages[-1]
@@ -74,7 +68,6 @@ def suggester_router(state: "AgentState"):
 
 def fixer_router(state: "AgentState"):
     """Router for fixer agent"""
-    from langchain_core.messages import AIMessage, HumanMessage
 
     messages = state["messages"]
     last_message = messages[-1]

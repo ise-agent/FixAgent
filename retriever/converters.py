@@ -3,7 +3,7 @@ from typing import Dict, Any
 from models.entities import Clazz, Method, Variable
 
 
-def convert_to_clazz(node: Dict[str, Any]) -> Clazz:
+def _convert_to_clazz(node: Dict[str, Any]) -> Clazz:
     """Convert Neo4j node data to Clazz object"""
     return Clazz(
         name=node["name"],
@@ -17,7 +17,7 @@ def convert_to_clazz(node: Dict[str, Any]) -> Clazz:
     )
 
 
-def convert_to_method(node: Dict[str, Any]) -> Method:
+def _convert_to_method(node: Dict[str, Any]) -> Method:
     """Convert Neo4j node data to Method object"""
     return Method(
         name=node["name"],
@@ -33,7 +33,7 @@ def convert_to_method(node: Dict[str, Any]) -> Method:
     )
 
 
-def convert_to_variable(node: Dict[str, Any]) -> Variable:
+def _convert_to_variable(node: Dict[str, Any]) -> Variable:
     """Convert Neo4j node data to Variable object"""
     return Variable(
         name=node["name"],

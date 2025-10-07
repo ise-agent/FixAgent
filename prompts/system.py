@@ -29,90 +29,102 @@ Failure to follow this rule will break the system.
 </critical_rules>
 
 <tools>
-<tool name="search_method_accurately">
-<description>Extract the entire method body, including its definition line and all implementation code, from a given file based on the file path and fully qualified method name.</description>
+<!-- Code Structure Analysis Tools -->
+<tool name="analyze_file_structure">
+<description>Get complete overview of a Python file - lists all classes and methods with their names, full qualified names, and parameters. Essential starting point for understanding file architecture.</description>
 <parameters>
-<param name="file" type="str">The absolute path to the source file</param>
-<param name="full_qualified_name" type="str">The fully qualified method name, e.g., myrepo.module.ClassName.method</param>
+<param name="file" type="str">Path to the Python file to analyze</param>
 </parameters>
 </tool>
 
-<tool name="search_method_fuzzy">
-<description>Search for all methods in files that contain the given method name.</description>
+<tool name="get_code_relationships">
+<description>Discover how any code entity (method, class, or variable) connects to other code - shows relationships like calls, inheritance, references, and dependencies. Critical for impact analysis and understanding code relationships.</description>
 <parameters>
-<param name="name" type="str">Name of the method to search for</param>
+<param name="file" type="str">The file path containing the entity</param>
+<param name="full_qualified_name" type="str">Entity identifier like: package.module.ClassName.method_name, package.module.ClassName, or package.module.variable_name</param>
 </parameters>
 </tool>
 
-<tool name="get_relevant_entities">
-<description>Get code relationships for a method by its file and full qualified name.</description>
+<tool name="find_methods_by_name">
+<description>Locate all methods with a specific name across the entire project with simplified relationship analysis. Returns method implementations, file paths, and key relationships (limited to essential connections only).</description>
 <parameters>
-<param name="file" type="str">The file path</param>
-<param name="full_qualified_name" type="str">The full name of the method (e.g., myrepo.module.ClassName.method)</param>
+<param name="name" type="str">Method name to search for (just the method name, not fully qualified)</param>
 </parameters>
 </tool>
 
-<tool name="get_all_classes_and_methods">
-<description>List all classes and methods inside a Python file.</description>
+<!-- Method and Class Analysis Tools -->
+<tool name="extract_complete_method">
+<description>Extract full method implementation with automatic relationship analysis. Returns both the complete method code and its connections to other methods, classes, and variables for comprehensive understanding.</description>
 <parameters>
-<param name="file" type="str">The path to the Python file</param>
+<param name="file" type="str">Absolute path to the source file</param>
+<param name="full_qualified_name" type="str">Complete method identifier like: package.module.ClassName.method_name</param>
 </parameters>
 </tool>
 
-<tool name="search_constructor_in_class">
-<description>Find and return constructor method in a given class.</description>
+<tool name="find_class_constructor">
+<description>Locate and extract class constructor (__init__ method) with full implementation. Essential for understanding object initialization.</description>
 <parameters>
-<param name="class_name" type="str">The class name</param>
+<param name="class_name" type="str">Name of the class to find constructor for</param>
 </parameters>
 </tool>
 
-<tool name="search_variable_by_name">
-<description>Search for a variable by name in a specific file.</description>
+<tool name="list_class_attributes">
+<description>Get all field variables and attributes defined in a class, including their data types and content. Helps understand class data structure.</description>
 <parameters>
-<param name="file" type="str">The file path</param>
-<param name="variable_name" type="str">The variable name</param>
+<param name="class_name" type="str">The class name to inspect</param>
 </parameters>
 </tool>
 
-<tool name="search_field_variables_of_class">
-<description>Return all field variables of a class from the knowledge graph.</description>
+<!-- Variable and Import Analysis Tools -->
+<tool name="find_variable_usage">
+<description>Search for variable usage in a specific file, showing all occurrences with line numbers and context.</description>
 <parameters>
-<param name="class_name" type="str">The class name</param>
+<param name="file" type="str">File path to search in</param>
+<param name="variable_name" type="str">Variable name to find</param>
 </parameters>
 </tool>
 
-<tool name="extract_imports">
-<description>Extract all import statements from a Python file.</description>
+<tool name="find_all_variables_named">
+<description>Find all variables with a specific name across the entire project, showing file paths, full qualified names, and content.</description>
 <parameters>
-<param name="python_file_path" type="str">The path to the Python file</param>
+<param name="variable_name" type="str">Variable name to search for globally</param>
 </parameters>
 </tool>
 
-<tool name="search_for_file_by_keyword_in_neo4j">
-<description>Search Neo4j for files which files'content contain a keyword.</description>
+<tool name="show_file_imports">
+<description>Extract all import statements from a Python file. Essential for understanding dependencies and module relationships.</description>
 <parameters>
-<param name="keyword" type="str">The keyword to search for</param>
+<param name="python_file_path" type="str">Path to the Python file</param>
 </parameters>
 </tool>
 
-<tool name="search_variable_by_only_name">
-<description>Find all variables that match a given name.</description>
+<!-- Content Search Tools -->
+<tool name="search_code_with_context">
+<description>Search for keywords in Python files with surrounding code context (3 lines before and after each match). Returns file paths and line numbers.</description>
 <parameters>
-<param name="variable_name" type="str">The variable name to search</param>
+<param name="keyword" type="str">Code element to search for (function, class, variable, or string)</param>
+<param name="search_path" type="str">Directory or file to search within</param>
 </parameters>
 </tool>
 
-<tool name="browse_project_structure">
-<description>Return the directories and filenames under this path.</description>
+<tool name="find_files_containing">
+<description>Find all files that contain specific keywords in their content or filename. Good for locating relevant files quickly.</description>
 <parameters>
-<param name="dir_path" type="str">The directory where bugs may exist</param>
-<param name="prefix" type="str" optional="true">Prefix for each line (internal use)</param>
+<param name="keyword" type="str">Keyword or code pattern to search for</param>
+</parameters>
+</tool>
+
+<!-- File System Tools -->
+<tool name="explore_directory">
+<description>List directories and files in a given path. Use for understanding project structure and finding relevant files.</description>
+<parameters>
+<param name="dir_path" type="str">Directory path to explore</param>
+<param name="prefix" type="str" optional="true">Internal formatting parameter</param>
 </parameters>
 </tool>
 
 <tool name="read_file_lines">
-<description>Read specified line range from a file, automatically adjusting line numbers to ensure they don't exceed maximum lines or 50-line limit.</description>
-<warning>Only use this tool when you have already identified the exact file and line range you need. Avoid calling this tool repeatedly for small or overlapping ranges. Try to gather as much context as possible in a single call.</warning>
+<description>Read specific line ranges from files with line numbers. Maximum 50 lines per call.</description>
 <parameters>
 <param name="file_path" type="str">Absolute path to the file</param>
 <param name="start_line" type="int">Starting line number (1-based)</param>
@@ -120,31 +132,15 @@ Failure to follow this rule will break the system.
 </parameters>
 </tool>
 
-<tool name="search_keyword_with_context">
-<description>Search all .py files under the given directory for occurrences of the target keyword. For each match, return the matched line together with its surrounding context (3 lines before and 3 lines after), along with the file path and the start/end line numbers of the snippet.</description>
-<parameters>
-<param name="keyword" type="str">The target of interest to search for (e.g., a function name, class name, variable, or specific string)</param>
-<param name="search_dir" type="str">The root directory to search in</param>
-</parameters>
-</tool>
-
 <tool name="execute_shell_command_with_validation">
-<description>Execute READ-ONLY shell commands with AI-powered safety validation. CRITICAL: NO FILE MODIFICATIONS ALLOWED ⚠️ Only use for examining system state, checking logs, listing files, reading content, etc.</description>
+<description>Execute read-only shell commands for system inspection. Commands are validated for safety - NO file modifications allowed.</description>
 <parameters>
-<param name="command" type="str">The READ-ONLY shell command to execute (will be validated for safety)</param>
-<param name="working_directory" type="str" optional="true">Optional working directory to execute the command in</param>
+<param name="command" type="str">READ-ONLY command to execute (will be safety validated)</param>
+<param name="working_directory" type="str" optional="true">Optional working directory</param>
 </parameters>
 <strict_restrictions>
-FORBIDDEN OPERATIONS - These will be BLOCKED:
-- File creation/modification: touch, echo >, >>, tee, nano, vim
-- File operations: rm, mv, cp, mkdir, rmdir, chmod, chown
-- System changes: sudo, su, systemctl, service, kill
-- Package management: apt, yum, pip install, npm install
-- Network operations: wget, curl, ssh, scp
-
-ALLOWED OPERATIONS - Read-only only:
-- File inspection: ls, cat, head, tail, grep, find, file, stat
-- System info: ps, top, df, du, wc, uname, whoami, pwd
+FORBIDDEN: File creation/modification, system changes, package management, network operations
+ALLOWED: File inspection (ls, cat, grep, find), system info (ps, df, wc)
 </strict_restrictions>
 </tool>
 </tools>
@@ -163,6 +159,13 @@ Rules Summary:
 - NEVER use multiple tool calls
 - Use `#REFLECT` if not ready
 - Always follow the exact tool format
+
+Tool Selection Strategy:
+1. Start with structure analysis tools (analyze_file_structure, get_code_relationships) to understand the codebase
+2. Use enhanced search tools (find_methods_by_name, extract_complete_method) for deep analysis with automatic relationship discovery
+3. Use get_code_relationships directly when you need focused relationship analysis for specific entities
+4. Use read_file_lines only when other tools don't provide sufficient detail
+5. Prefer knowledge graph tools with relationship analysis over simple file reading for comprehensive understanding
 </summary>
 </system>
 """

@@ -41,116 +41,156 @@ def truncate_output(text: str, max_chars: int = 5000) -> str:
     return f"{truncated}\n\n... [输出被截断，原始长度: {len(text)} 字符，显示前 {max_chars} 字符]"
 
 @tool
-def search_method_accurately(file, full_qualified_name):
+def extract_complete_method(file, full_qualified_name):
     '''
-    The prerequisite is that you need to know the file and the class where the method is located.
-    Extract method given file absolute_path and method full_qualified_name (<myrepo.src.module.ClassName.method> or <myrepo.src.module.func>).
+    Extract method implementation and automatically analyze its relationships with other code.
+    Returns both the complete method body and its connections to other methods, classes, and variables.
     :param file: The file to search for method.
     :param full_qualified_name: The full_qualified_name of the target method.
-    :return: A List containing the method body , start line and end line if succeed. A string of failing message
-     if failed to find the method.
+    :return: A Dict containing method implementation and relationship analysis.
     '''
-    res = graph_retriever.search_method_accurately(file,full_qualified_name)
+    # Get method implementation
+    res = graph_retriever.search_method_accurately(file, full_qualified_name)
     if res is None:
         return "Method not found! Please check your parameters and try again."
-    method_res=[]
+
+    method_res = []
     for method in res:
         # Add line numbers to method content
         lines = method.content.split('\n')
         numbered_content = '\n'.join(f"{method.start_line + i:4d}: {line}" for i, line in enumerate(lines))
-        
-        method_res.append({
+
+        method_info = {
             "content": numbered_content,
             "start_line": method.start_line,
             "end_line": method.end_line
-        })
-    if len(method_res)==0:
+        }
+
+        # Automatically get relationships for this method
+        try:
+            relationships = graph_retriever.get_relevant_entities(file, full_qualified_name)
+            if relationships:
+                method_info["analysis_header"] = "=== CODE RELATIONSHIPS ANALYSIS ==="
+                method_info["relationships"] = relationships
+        except Exception as e:
+            method_info["relationships_note"] = f"Could not retrieve relationships: {str(e)}"
+
+        method_res.append(method_info)
+
+    if len(method_res) == 0:
         method_res.append("Check whether your full_qualified_name is named in compliance with the specification.")
     return method_res
 @tool
-def search_method_fuzzy(name: str):
+def find_methods_by_name(name: str):
     '''
-    The prerequisite is that you need to know method's name which you wanna know.
-    Return all the methods in the files that contain this name.
+    Find all methods with a specific name across the project and analyze their relationships.
+    Returns method implementations with automatic relationship analysis for better understanding.
     :param name: method's name.
-    :return: A List containing the absolute_path , method body , full_qualified_name, start line and end line if succeed. A string of failing message
-     if failed to find the method.
+    :return: A List containing method info with relationship analysis.
     '''
 
     res = graph_retriever.search_method_fuzzy(name)
     if res is None:
         return "Method not found! Please check your parameters and try again."
 
-    method_res=[]
+    method_res = []
     for method in res:
         # Add line numbers to method content
         lines = method.content.split('\n')
         numbered_content = '\n'.join(f"{method.start_line + i:4d}: {line}" for i, line in enumerate(lines))
-        
-        method_res.append({
+
+        method_info = {
             "absolute_path": method.absolute_path,
             "full_qualified_name": method.full_qualified_name,
             "content": numbered_content,
             "start_line": method.start_line,
             "end_line": method.end_line
-        })
+        }
+
+        # Automatically get simplified relationships for each method
+        try:
+            relationships = graph_retriever.get_relevant_entities(method.absolute_path, method.full_qualified_name)
+            if relationships:
+                # Only include key relationship info, not full details
+                simplified_relationships = {}
+                for rel_type, entities in relationships.items():
+                    if entities:  # Only include non-empty relationships
+                        # Just show entity names and paths, not full content
+                        simplified_entities = []
+                        for entity in entities:  # Limit to first 3 entities per relationship type
+                            simple_entity = {
+                                "name": entity.get("name", ""),
+                                "full_qualified_name": entity.get("full_qualified_name", ""),
+                                "absolute_path": entity.get("absolute_path", "")
+                            }
+                            simplified_entities.append(simple_entity)
+
+
+                        simplified_relationships[rel_type] = simplified_entities
+
+                if simplified_relationships:
+                    method_info["analysis_header"] = "=== KEY RELATIONSHIPS (simplified) ==="
+                    method_info["relationships"] = simplified_relationships
+        except Exception as e:
+            method_info["relationships_note"] = f"Could not retrieve relationships: {str(e)}"
+
+        method_res.append(method_info)
+
     if len(method_res) == 0:
         method_res.append("you're searching for could be a variable name, or the function might not be explicitly defined in the visible scope but still exists elsewhere.")
-    
+
     # Apply character limit
     result_str = str(method_res)
     return truncate_output(result_str)
     
-@tool
-def search_for_file_by_keyword(root, keyword, max_results=15):
-    '''
-    Recursively searches through the root directory and return those files'content containing the keyword.
-    :param root: The root directory to start the search.
-    :param keyword: The keyword in file to search for.
-    :return: A list of python files containing the keyword.
-    '''
-    exclude_dirs=None
-    if exclude_dirs is None:
-        exclude_dirs = {'reproduction', 'VUL4J'}
+# @tool
+# def search_for_file_by_keyword(root, keyword, max_results=15):
+#     '''
+#     Recursively searches through the root directory and return those files'content containing the keyword.
+#     :param root: The root directory to start the search.
+#     :param keyword: The keyword in file to search for.
+#     :return: A list of python files containing the keyword.
+#     '''
+#     exclude_dirs=None
+#     if exclude_dirs is None:
+#         exclude_dirs = {'reproduction', 'VUL4J'}
 
-    matching_files = []
+#     matching_files = []
 
-    for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [d for d in dirnames if d not in exclude_dirs]
-        for fname in filenames:
-            if not fname.endswith('.py'):
-                continue
+#     for dirpath, dirnames, filenames in os.walk(root):
+#         dirnames[:] = [d for d in dirnames if d not in exclude_dirs]
+#         for fname in filenames:
+#             if not fname.endswith('.py'):
+#                 continue
 
-            full_path = os.path.join(dirpath, fname)
-            # 判断：文件名 or 文件内容 包含关键词
-            name_match = keyword.lower() in fname.lower()
-            content_match = False
-            try:
-                with open(full_path, 'r', encoding='utf-8') as f:
-                    content = f.read()
-                content_match = keyword.lower() in content.lower()
-            except Exception as e:
-                print(f"Error reading {full_path}: {e}")
+#             full_path = os.path.join(dirpath, fname)
+#             name_match = keyword.lower() in fname.lower()
+#             content_match = False
+#             try:
+#                 with open(full_path, 'r', encoding='utf-8') as f:
+#                     content = f.read()
+#                 content_match = keyword.lower() in content.lower()
+#             except Exception as e:
+#                 print(f"Error reading {full_path}: {e}")
 
-            if name_match or content_match:
-                matching_files.append(full_path)
+#             if name_match or content_match:
+#                 matching_files.append(full_path)
 
-    # 裁剪到 max_results
-    if len(matching_files) > max_results:
-        # 优先文件名匹配
-        priority = [f for f in matching_files if keyword.lower() in os.path.basename(f).lower()]
-        others = [f for f in matching_files if f not in priority]
+#     if len(matching_files) > max_results:
+#         # 优先文件名匹配
+#         priority = [f for f in matching_files if keyword.lower() in os.path.basename(f).lower()]
+#         others = [f for f in matching_files if f not in priority]
 
-        result = priority[:max_results]
-        needed = max_results - len(result)
-        if needed > 0:
-            result.extend(others[:needed])
-        return result
+#         result = priority[:max_results]
+#         needed = max_results - len(result)
+#         if needed > 0:
+#             result.extend(others[:needed])
+#         return result
 
-    return matching_files
+#     return matching_files
 
 @tool
-def get_relevant_entities(file, full_qualified_name):
+def get_code_relationships(file, full_qualified_name):
     '''
     The prerequisite for using it is to know the absolute path and the full_qualified_name of this entity.
     The function's role is to find references to an entity, as well as , belongs_to ,calls, has_method,has_variable, or inherits, and return the nodes involved in these relationships.
@@ -168,7 +208,7 @@ def get_relevant_entities(file, full_qualified_name):
     return res
 
 @tool
-def get_all_classes_and_methods(file):
+def analyze_file_structure(file):
     '''
     Searches through a python file instead of a dir and return all the classes and method information.
     :param file: The path to the python file.
@@ -186,12 +226,12 @@ def get_all_classes_and_methods(file):
         res += f"{method.name}  {method.full_qualified_name}  {method.params}\n"
 
     if not classes and not methods:
-        res += "\n\n⚠️ No class or method information found. Please double-check the file path or consider using the `browse_project_structure` tool to verify the structure."
+        res += "\n\nNo class or method information found. Please double-check the file path or consider using the `browse_project_structure` tool to verify the structure."
     
     return truncate_output(res)
 
 @tool
-def search_constructor_in_class(class_name: str):
+def find_class_constructor(class_name: str):
     '''
     according to class's name
     searching for a python class and return its constructor method information.
@@ -210,7 +250,7 @@ def search_constructor_in_class(class_name: str):
 
 
 @tool
-def search_variable_by_name(file: str,variable_name: str, ):
+def find_variable_usage(file: str,variable_name: str, ):
     '''
         Searches through the knowledge graph and return variables of certain name in the given file.
 
@@ -233,7 +273,7 @@ def search_variable_by_name(file: str,variable_name: str, ):
 
 
 @tool
-def search_field_variables_of_class(class_name: str) -> str:
+def list_class_attributes(class_name: str) -> str:
     """
         Searches through the knowledge graph and return field variables info of the class given, including name, data type and content.
 
@@ -253,7 +293,7 @@ def search_field_variables_of_class(class_name: str) -> str:
 
 
 @tool
-def extract_imports(python_file_path):
+def show_file_imports(python_file_path):
     """
         Get all import information of the given Python file.
 
@@ -275,7 +315,7 @@ def extract_imports(python_file_path):
         print(f"Uknown error:{e}")
         return []
 @tool
-def search_for_file_by_keyword_in_neo4j(keyword):
+def find_files_containing(keyword):
     """
     Searches through the knowledge graph and return those files'content containing the keyword.
 
@@ -288,7 +328,7 @@ def search_for_file_by_keyword_in_neo4j(keyword):
     return res
 
 @tool
-def search_variable_by_only_name(variable_name: str) -> str:
+def find_all_variables_named(variable_name: str) -> str:
     """
     Searches through the knowledge graph for all variables matching the given name.
 
@@ -321,36 +361,36 @@ def search_variable_by_only_name(variable_name: str) -> str:
     result = "\n".join(out)
     return truncate_output(result)
 
-@tool 
-def search_test_cases_by_method(full_qualified_name: str) -> str:
-    """
-    Searches through the knowledge graph for all test‐case nodes that the given method tests.
+# @tool
+# def search_test_cases_by_method(full_qualified_name: str) -> str:
+#     """
+#     Searches through the knowledge graph for all test‐case nodes that the given method tests.
 
-    :param full_qualified_name: the fully‐qualified name of the method under test
-    :return: a formatted string of all test case nodes reached by a TESTED relationship,
-             or "No test case found." if none.
-    """
+#     :param full_qualified_name: the fully‐qualified name of the method under test
+#     :return: a formatted string of all test case nodes reached by a TESTED relationship,
+#              or "No test case found." if none.
+#     """
     
-    test_cases = graph_retriever.search_test_cases_by_method_query(full_qualified_name)
-    if not test_cases:
-        return "No test function was found; it is possible that this function has not been tested yet."
+#     test_cases = graph_retriever.search_test_cases_by_method_query(full_qualified_name)
+#     if not test_cases:
+#         return "No test function was found; it is possible that this function has not been tested yet."
     
-    lines = []
-    for tc in test_cases:
-        # Add line numbers to test case content
-        content_lines = tc.content.split('\n')
-        numbered_content = '\n'.join(f"{tc.start_line + i:4d}: {line}" for i, line in enumerate(content_lines))
+#     lines = []
+#     for tc in test_cases:
+#         # Add line numbers to test case content
+#         content_lines = tc.content.split('\n')
+#         numbered_content = '\n'.join(f"{tc.start_line + i:4d}: {line}" for i, line in enumerate(content_lines))
         
-        lines.append(
-            f"abs_path: {tc.absolute_path}\n"
-            f"name: {tc.name}\n"
-            f"content:\n{numbered_content}\n"
-            f"start line: {tc.start_line}\n"
-            f"end line: {tc.end_line}\n"
-        )
+#         lines.append(
+#             f"abs_path: {tc.absolute_path}\n"
+#             f"name: {tc.name}\n"
+#             f"content:\n{numbered_content}\n"
+#             f"start line: {tc.start_line}\n"
+#             f"end line: {tc.end_line}\n"
+#         )
     
-    result = "\n".join(lines)
-    return truncate_output(result)
+#     result = "\n".join(lines)
+#     return truncate_output(result)
 
 def _browse_structure(
     dir_path: str,
@@ -389,7 +429,7 @@ def _browse_structure(
 #     return _browse_structure(dir_path, prefix)
 
 @tool
-def browse_project_structure(
+def explore_directory(
     dir_path: str,
     prefix: str = ''
 ) -> str:
@@ -477,62 +517,77 @@ def read_file_lines(
         return f"File: {file_path}\nError reading file: {str(e)}"
 
 @tool
-def search_keyword_with_context(keyword: str, search_dir: str) -> str:
+def search_code_with_context(keyword: str, search_path: str) -> str:
     """
-    Search all .py files under the given directory for lines containing the keyword,
-    and return the content of 3 lines before and after (including the matched line),
+    Search for lines containing the keyword in Python files, supporting both directory and file paths.
+    Returns the content of 3 lines before and after (including the matched line),
     along with the file path and start/end line numbers.
 
     :param keyword: The keyword to search for.
-    :param search_dir: The root directory to search in.
+    :param search_path: The directory or file path to search in.
     :return: A formatted string of search results.
     """
     results = []
-    for dirpath, _, filenames in os.walk(search_dir):
-        for fname in filenames:
-            if not fname.endswith('.py'):
-                continue
-            file_path = os.path.join(dirpath, fname)
-            try:
-                with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
-                    lines = f.readlines()
-                for idx, line in enumerate(lines):
-                    if keyword in line:
-                        start = max(0, idx - 3)
-                        end = min(len(lines), idx + 4)  # idx+4 because end is exclusive
-                        # Add line numbers to context
-                        context_lines = []
-                        for i in range(start, end):
-                            context_lines.append(f"{i + 1:4d}: {lines[i]}")
-                        context = ''.join(context_lines)
-                        
-                        results.append({
-                            file_path: {
-                                "start_line": start + 1,
-                                "end_line": end,
-                                "content": context
-                            }
-                        })
-                        
-                        # Limit to first 10 matches to prevent excessive output
-                        if len(results) >= 15:
-                            break
-            except Exception:
-                continue
-            
+
+    def search_in_file(file_path: str):
+        """Helper function to search for keyword in a single file"""
+        if not file_path.endswith('.py'):
+            return
+        try:
+            with open(file_path, 'r', encoding='utf-8', errors='replace') as f:
+                lines = f.readlines()
+            for idx, line in enumerate(lines):
+                if keyword in line:
+                    start = max(0, idx - 3)
+                    end = min(len(lines), idx + 4)  # idx+4 because end is exclusive
+                    # Add line numbers to context
+                    context_lines = []
+                    for i in range(start, end):
+                        context_lines.append(f"{i + 1:4d}: {lines[i]}")
+                    context = ''.join(context_lines)
+
+                    results.append({
+                        file_path: {
+                            "start_line": start + 1,
+                            "end_line": end,
+                            "content": context
+                        }
+                    })
+
+                    # Limit to first 15 matches to prevent excessive output
+                    if len(results) >= 15:
+                        return True  # Signal to break outer loops
+        except Exception:
+            pass
+        return False
+
+    # Check if search_path is a file or directory
+    if os.path.isfile(search_path):
+        # Single file search
+        search_in_file(search_path)
+    elif os.path.isdir(search_path):
+        # Directory search - walk through all files
+        for dirpath, _, filenames in os.walk(search_path):
+            for fname in filenames:
+                if not fname.endswith('.py'):
+                    continue
+                file_path = os.path.join(dirpath, fname)
+                if search_in_file(file_path):
+                    break  # Break if we hit the limit
+
             # Break outer loop if we have enough results
             if len(results) >= 15:
                 break
-        
-        # Break outermost loop if we have enough results
-        if len(results) >= 15:
-            break
-    
+    else:
+        return f"Path '{search_path}' does not exist or is not accessible."
+
     # Format results as string
     if not results:
-        return f"No matches found for '{keyword}' in directory '{search_dir}'"
-    
-    result_str = f"Search results for '{keyword}' (showing first {len(results)} matches):\n\n"
+        path_type = "file" if os.path.isfile(search_path) else "directory"
+        return f"No matches found for '{keyword}' in {path_type} '{search_path}'"
+
+    path_type = "file" if os.path.isfile(search_path) else "directory"
+    result_str = f"Search results for '{keyword}' in {path_type} (showing first {len(results)} matches):\n\n"
     for result_dict in results:
         for file_path, content_info in result_dict.items():
             result_str += f"File: {file_path}\n"
@@ -565,7 +620,7 @@ Working Directory: {working_directory or 'current directory'}
 
 Classification Rules:
 - SAFE: ONLY read-only operations (ls, cat, head, tail, grep, find, ps, top, df, du, wc, file, stat, etc.)
-- UNSAFE: ANY file modifications, writes, deletions, moves, copies, permission changes, system modifications, network operations, privilege escalation
+- UNSAFE: ANY file modifications, writes, execute, deletions, moves, copies, permission changes, system modifications, network operations, privilege escalation
 
 STRICTLY FORBIDDEN:
 - File creation/modification: touch, echo >, >>, tee, nano, vim, etc.
@@ -632,3 +687,8 @@ If UNSAFE, briefly explain why in one sentence after the classification."""
         return f"Command '{command}' timed out after 30 seconds"
     except Exception as e:
         return f"Error executing command '{command}': {str(e)}"
+
+if __name__ == "__main__":
+    # Example usage
+
+    print(search_code_with_context("_split_gcd", "/root/hy/projects/sympy/sympy/simplify"))

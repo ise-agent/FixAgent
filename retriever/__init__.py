@@ -1,11 +1,11 @@
 """Code Knowledge Graph Retriever module"""
 
 from .ckg_retriever import CKGRetriever
-from .converters import convert_to_clazz, convert_to_method, convert_to_variable
+from .converters import _convert_to_clazz, _convert_to_method, _convert_to_variable
 
 __all__ = [
     "CKGRetriever",
-    "convert_to_clazz",
-    "convert_to_method",
-    "convert_to_variable"
+    "_convert_to_clazz",
+    "_convert_to_method",
+    "_convert_to_variable"
 ]

@@ -1,4 +1,5 @@
 from typing import Optional
+from datetime import datetime
 from pydantic import Field
 from pydantic_settings import BaseSettings
 
@@ -24,13 +25,17 @@ class Settings(BaseSettings):
     neo4j_password: str = Field(default="12345678", env="NEO4J_PASSWORD")
 
     # Project Settings
-    test_bed: str = Field(default="/tmp/test", env="TEST_BED")
-    project_name: str = Field(default="test_project", env="PROJECT_NAME")
-    instance_id: str = Field(default="test_instance", env="INSTANCE_ID")
-    problem_statement: str = Field(default="Find and fix bugs in the project", env="PROBLEM_STATEMENT")
+    TEST_BED: str = Field(default="/root/hy/projects", env="TEST_BED")
+    PROJECT_NAME: str = Field(default="sympy", env="PROJECT_NAME")
+    INSTANCE_ID: str = Field(default="sympy__sympy-13798", env="INSTANCE_ID")
+    PROBLEM_STATEMENT: str = Field(default="Find and fix bugs in the project", env="PROBLEM_STATEMENT")
 
 
-    round: str = Field(default="AAA_jiancaihange", env="ROUND")
+    ROUND: str = Field(default="verified_Claude-4-Sonnet_round_c_3", env="ROUND")
+
+    # Unified timestamp for the entire application run
+    timestamp: str = Field(default_factory=lambda: datetime.now().strftime("%Y-%m-%d_%H-%M-%S"))
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

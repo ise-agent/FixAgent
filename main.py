@@ -1,9 +1,8 @@
-import json
 import io
 from datetime import datetime
 from pathlib import Path
 from contextlib import redirect_stdout
-
+import pandas as pd
 from langgraph.errors import GraphRecursionError
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage
@@ -12,38 +11,50 @@ from langchain_core.messages import HumanMessage
 from prompt import locator_template, suggester_template, fixer_template
 from workflow.graph import create_workflow
 from router.router import is_tool_result_message
+from script.reset import update_database_in_conf, restart_neo4j,checkout_to_base_commit
 from utils.logging import set_api_stats_file
 from utils.logger import Logger
 from settings import settings
 
+def _get_problem_statement_by_instance_id(id):
+    current_dir = Path(__file__).parent
+    # parquet_path = current_dir / "dataset.parquet"
+    parquet_path = current_dir /"dataset"/ "verified.parquet"
+
+    df = pd.read_parquet(parquet_path)
+    result = df.loc[df["instance_id"] == id, "problem_statement"]
+    problem_statement = result.iloc[0] if not result.empty else None
+    return problem_statement
+
 MODEL_TYPE = settings.openai_model or "claude-sonnet-4-20250514"
-ROUND = settings.round
+ROUND = settings.ROUND
 
 # Use settings for project configuration
-TEST_BED = settings.test_bed
-PROJECT_NAME = settings.project_name
-INSTANCE_ID = settings.instance_id
-PROBLEM_STATEMENT = settings.problem_statement
+TEST_BED = settings.TEST_BED
+PROJECT_NAME = settings.PROJECT_NAME
+INSTANCE_ID = settings.INSTANCE_ID
+PROBLEM_STATEMENT = _get_problem_statement_by_instance_id(INSTANCE_ID)
 
+print("========ISEA Settings========")
+print(f"{TEST_BED}")
+print(f"{PROJECT_NAME}")
+print(f"{INSTANCE_ID}")
+print("=============================")
 # No external dependencies needed - using internal Logger
 
-# Initialize LLM
-# TODO @<hanyu44> 修改配置
 llm = ChatOpenAI(
     model=MODEL_TYPE,
     temperature=0.0,
-    api_key="sk-NdZukOuQQRhydvPW33Dc1e05AbCa4fE394BfD3FfB9Ac09Be",
+    api_key=settings.openai_api_key,
     base_url=settings.openai_base_url,
 )
 
 # Setup logging
 base_dir = TEST_BED
 project_name = PROJECT_NAME
-timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+timestamp = settings.timestamp
 logs_dir = Path(__file__).parent / "logs"
 logger = Logger(logs_dir / ROUND, f"{INSTANCE_ID}_{timestamp}.log")
-res_dir = logs_dir / ROUND / f"{INSTANCE_ID}_{timestamp}.json"
-res_json = {"location": [], "failed_patch": []}
 api_stats_file = logs_dir / ROUND / f"{INSTANCE_ID}_{timestamp}_api_stats.json"
 set_api_stats_file(str(api_stats_file))
 
@@ -51,48 +62,49 @@ set_api_stats_file(str(api_stats_file))
 def get_default_tools():
     """Get default tools"""
     from tools.retriever_tools import (
-        browse_project_structure,
-        get_all_classes_and_methods,
-        search_for_file_by_keyword_in_neo4j,
-        get_relevant_entities,
-        search_method_fuzzy,
-        search_method_accurately,
-        search_constructor_in_class,
-        search_field_variables_of_class,
-        extract_imports,
-        search_variable_by_name,
-        search_variable_by_only_name,
-        search_test_cases_by_method,
+        explore_directory,
+        analyze_file_structure,
+        find_files_containing,
+        get_code_relationships,
+        find_methods_by_name,
+        extract_complete_method,
+        find_class_constructor,
+        list_class_attributes,
+        show_file_imports,
+        find_variable_usage,
+        find_all_variables_named,
         read_file_lines,
-        search_keyword_with_context,
+        search_code_with_context,
         execute_shell_command_with_validation,
     )
 
     return [
-        browse_project_structure,
-        get_all_classes_and_methods,
-        search_for_file_by_keyword_in_neo4j,
-        get_relevant_entities,
-        search_method_fuzzy,
-        search_method_accurately,
-        search_constructor_in_class,
-        search_field_variables_of_class,
-        extract_imports,
-        search_variable_by_name,
-        search_variable_by_only_name,
-        search_test_cases_by_method,
+        explore_directory,
+        analyze_file_structure,
+        find_files_containing,
+        get_code_relationships,
+        find_methods_by_name,
+        extract_complete_method,
+        find_class_constructor,
+        list_class_attributes,
+        show_file_imports,
+        find_variable_usage,
+        find_all_variables_named,
         read_file_lines,
-        search_keyword_with_context,
+        search_code_with_context,
         execute_shell_command_with_validation,
     ]
 
 
 def main():
     print("Starting ISEA")
-    print(f"Model: {MODEL_TYPE}")
-    print(f"Project: {project_name}")
-    print(f"Base directory: {base_dir}")
     print("-" * 60)
+    # TODO @<hanyu> 调整位置
+    dir_name = Path(TEST_BED)/PROJECT_NAME
+    checkout_to_base_commit(INSTANCE_ID, dir_name)
+    update_database_in_conf(INSTANCE_ID)
+    restart_neo4j()
+
 
     # Get tools
     locator_tools = get_default_tools()
@@ -175,24 +187,17 @@ def main():
 
                     logger.log("info", results + "\n")
 
-                    # Also print to console for real-time feedback
-                    if results.strip():
-                        print(results)
+            
 
     except GraphRecursionError:
         logger.log("info", "Recursion limit reached. Performing final actions...")
-        if "succeed_patch" not in res_json.keys():
-            with open(res_dir, "w", encoding="utf-8") as f:
-                json.dump(res_json, f, indent=4)
-            logger.log("info", f"Patch info saved to {res_dir} successfully!")
+        
 
     except Exception as e:
         print(f"Error during workflow execution: {e}")
         logger.log("error", f"Workflow execution failed: {e}")
 
     finally:
-        print(f"\nResults saved to: {res_dir}")
-        print(f"Logs saved to: {logs_dir / ROUND}")
         print("ISEA execution completed")
 
 

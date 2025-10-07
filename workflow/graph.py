@@ -1,7 +1,7 @@
 """Workflow graph construction for ISEA agent system"""
 import functools
 from typing import List, Any
-
+from settings import settings
 from langgraph.graph import END, StateGraph, START
 
 from agent.state import AgentState
@@ -13,7 +13,7 @@ from router.router import (
     summarize_router
 )
 from .summarizer import summarize
-
+model_type = settings.openai_model
 
 def create_workflow(
     llm,
@@ -53,9 +53,9 @@ def create_workflow(
     fixer_tool_node = functools.partial(custom_tool_node, tool_map=fixer_tool_map)
 
     # Create agent nodes
-    locator_node = functools.partial(agent_node, agent=locator_agent, name="Locator")
-    suggester_node = functools.partial(agent_node, agent=suggester_agent, name="Suggester")
-    fixer_node = functools.partial(agent_node, agent=fixer_agent, name="Fixer")
+    locator_node = functools.partial(agent_node, agent=locator_agent, name="Locator", model_type=model_type)
+    suggester_node = functools.partial(agent_node, agent=suggester_agent, name="Suggester", model_type=model_type)
+    fixer_node = functools.partial(agent_node, agent=fixer_agent, name="Fixer", model_type=model_type)
 
     # Create summarizer with LLM
     summarize_node = functools.partial(summarize, llm=llm)
