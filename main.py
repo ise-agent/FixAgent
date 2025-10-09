@@ -3,6 +3,7 @@ from datetime import datetime
 from pathlib import Path
 from contextlib import redirect_stdout
 import pandas as pd
+import os
 from langgraph.errors import GraphRecursionError
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage
@@ -19,13 +20,15 @@ from settings import settings
 def _get_problem_statement_by_instance_id(id):
     current_dir = Path(__file__).parent
     # parquet_path = current_dir / "dataset.parquet"
-    parquet_path = current_dir /"dataset"/ "verified.parquet"
+    parquet_path = current_dir /"dataset"/ "lite.parquet"
 
     df = pd.read_parquet(parquet_path)
     result = df.loc[df["instance_id"] == id, "problem_statement"]
     problem_statement = result.iloc[0] if not result.empty else None
     return problem_statement
 
+# 检查是否禁用知识图谱
+DISABLE_KG = os.environ.get('DISABLE_KG', '').lower() == 'true'
 MODEL_TYPE = settings.openai_model or "claude-sonnet-4-20250514"
 ROUND = settings.ROUND
 
@@ -39,6 +42,7 @@ print("========ISEA Settings========")
 print(f"{TEST_BED}")
 print(f"{PROJECT_NAME}")
 print(f"{INSTANCE_ID}")
+print(f"DISABLE_KG: {DISABLE_KG}")
 print("=============================")
 # No external dependencies needed - using internal Logger
 
@@ -61,6 +65,7 @@ set_api_stats_file(str(api_stats_file))
 
 def get_default_tools():
     """Get default tools"""
+    # 一次性导入所有工具
     from tools.retriever_tools import (
         explore_directory,
         analyze_file_structure,
@@ -78,22 +83,31 @@ def get_default_tools():
         execute_shell_command_with_validation,
     )
 
-    return [
-        explore_directory,
-        analyze_file_structure,
-        find_files_containing,
-        get_code_relationships,
-        find_methods_by_name,
-        extract_complete_method,
-        find_class_constructor,
-        list_class_attributes,
-        show_file_imports,
-        find_variable_usage,
-        find_all_variables_named,
-        read_file_lines,
-        search_code_with_context,
-        execute_shell_command_with_validation,
-    ]
+    if DISABLE_KG:
+        return [
+            explore_directory,
+            show_file_imports,
+            read_file_lines,
+            search_code_with_context,
+            execute_shell_command_with_validation,
+        ]
+    else:
+        return [
+            explore_directory,
+            analyze_file_structure,
+            find_files_containing,
+            get_code_relationships,
+            find_methods_by_name,
+            extract_complete_method,
+            find_class_constructor,
+            list_class_attributes,
+            show_file_imports,
+            find_variable_usage,
+            find_all_variables_named,
+            read_file_lines,
+            search_code_with_context,
+            execute_shell_command_with_validation,
+        ]
 
 
 def main():
@@ -102,8 +116,11 @@ def main():
     # TODO @<hanyu> 调整位置
     dir_name = Path(TEST_BED)/PROJECT_NAME
     checkout_to_base_commit(INSTANCE_ID, dir_name)
-    update_database_in_conf(INSTANCE_ID)
-    restart_neo4j()
+
+    # 只在不禁用知识图谱时执行知识图谱相关操作
+    if not DISABLE_KG:
+        update_database_in_conf(INSTANCE_ID)
+        restart_neo4j()
 
 
     # Get tools

@@ -1,0 +1,1966 @@
+2025-10-08 21:51:41 - INFO - Logger initialized - log file: /root/hy/isea/logs/without_kg_Claude-3.5-Sonnet_round_c_3/matplotlib__matplotlib-23299_2025-10-08_21-51-41.log
+2025-10-08 21:51:47 - INFO - ================================== Ai Message ==================================
+Name: Locator
+
+I'll start by exploring the project structure to understand the codebase and then locate the bug related to `get_backend()` clearing figures from `Gcf.figs` when created under `rc_context`.
+
+#TOOL_CALL explore_directory { "dir_path": "/root/hy/projects_3/matplotlib" }
+
+
+2025-10-08 21:51:47 - INFO -    /\/ Tool Result:
+Contents of /root/hy/projects_3/matplotlib:
+.appveyor.yml
+.circleci/
+.coveragerc
+.flake8
+.git-blame-ignore-revs
+.git_archival.txt
+.gitattributes
+.github/
+.gitignore
+.lgtm.yml
+.mailmap
+.matplotlib-repo
+.meeseeksdev.yml
+.pre-commit-config.yaml
+.ruff_cache/
+CITATION.bib
+CODE_OF_CONDUCT.md
+INSTALL.rst
+LICENSE/
+README.rst
+SECURITY.md
+azure-pipelines.yml
+ci/
+doc/
+environment.yml
+examples/
+extern/
+lib/
+mplsetup.cfg.template
+plot_types/
+pytest.ini
+requirements/
+setup.cfg
+setup.py
+setupext.py
+src/
+tests.py
+tools/
+tox.ini
+tutorials/
+
+
+
+2025-10-08 21:51:50 - INFO - ================================== Ai Message ==================================
+Name: Locator
+
+I need to explore the matplotlib source code structure to understand where the relevant components are located.
+
+#TOOL_CALL explore_directory { "dir_path": "/root/hy/projects_3/matplotlib/lib" }
+
+
+2025-10-08 21:51:50 - INFO -    /\/ Tool Result:
+Contents of /root/hy/projects_3/matplotlib/lib:
+matplotlib/
+mpl_toolkits/
+pylab.py
+
+
+
+2025-10-08 21:51:54 - INFO - ================================== Ai Message ==================================
+Name: Locator
+
+Now let me explore the matplotlib directory to understand the structure better and find the relevant components.
+
+#TOOL_CALL explore_directory { "dir_path": "/root/hy/projects_3/matplotlib/lib/matplotlib" }
+
+
+2025-10-08 21:51:54 - INFO -    /\/ Tool Result:
+Contents of /root/hy/projects_3/matplotlib/lib/matplotlib:
+__init__.py
+_afm.py
+_animation_data.py
+_api/
+_blocking_input.py
+_cm.py
+_cm_listed.py
+_color_data.py
+_constrained_layout.py
+_docstring.py
+_enums.py
+_fontconfig_pattern.py
+_internal_utils.py
+_layoutgrid.py
+_mathtext.py
+_mathtext_data.py
+_pylab_helpers.py
+_text_helpers.py
+_tight_bbox.py
+_tight_layout.py
+_type1font.py
+afm.py
+animation.py
+artist.py
+axes/
+axis.py
+backend_bases.py
+backend_managers.py
+backend_tools.py
+backends/
+bezier.py
+blocking_input.py
+category.py
+cbook/
+cm.py
+collections.py
+colorbar.py
+colors.py
+container.py
+contour.py
+dates.py
+docstring.py
+dviread.py
+figure.py
+font_manager.py
+fontconfig_pattern.py
+gridspec.py
+hatch.py
+image.py
+layout_engine.py
+legend.py
+legend_handler.py
+lines.py
+markers.py
+mathtext.py
+mlab.py
+mpl-data/
+offsetbox.py
+patches.py
+path.py
+patheffects.py
+projections/
+pylab.py
+pyplot.py
+quiver.py
+rcsetup.py
+sankey.py
+scale.py
+sphinxext/
+spines.py
+stackplot.py
+streamplot.py
+style/
+table.py
+testing/
+tests/
+texmanager.py
+text.py
+textpath.py
+ticker.py
+tight_bbox.py
+tight_layout.py
+transforms.py
+tri/
+type1font.py
+units.py
+widgets.py
+
+
+
+2025-10-08 21:51:59 - INFO - ================================== Ai Message ==================================
+Name: Locator
+
+Based on the problem description, I need to investigate the `get_backend()` function and how it interacts with `Gcf.figs` when figures are created under `rc_context`. Let me start by looking at the `_pylab_helpers.py` file since that's where `Gcf` is likely defined.
+
+#TOOL_CALL read_file_lines { "file_path": "/root/hy/projects_3/matplotlib/lib/matplotlib/_pylab_helpers.py", "start_line": 1, "end_line": 50 }
+
+
+2025-10-08 21:51:59 - INFO -    /\/ Tool Result:
+File: /root/hy/projects_3/matplotlib/lib/matplotlib/_pylab_helpers.py
+Total lines: 144
+Showing lines 1-50:
+
+   1: """
+   2: Manage figures for the pyplot interface.
+   3: """
+   4: 
+   5: import atexit
+   6: from collections import OrderedDict
+   7: import gc
+   8: 
+   9: 
+  10: class Gcf:
+  11:     """
+  12:     Singleton to maintain the relation between figures and their managers, and
+  13:     keep track of and "active" figure and manager.
+  14: 
+  15:     The canvas of a figure created through pyplot is associated with a figure
+  16:     manager, which handles the interaction between the figure and the backend.
+  17:     pyplot keeps track of figure managers using an identifier, the "figure
+  18:     number" or "manager number" (which can actually be any hashable value);
+  19:     this number is available as the :attr:`number` attribute of the manager.
+  20: 
+  21:     This class is never instantiated; it consists of an `OrderedDict` mapping
+  22:     figure/manager numbers to managers, and a set of class methods that
+  23:     manipulate this `OrderedDict`.
+  24: 
+  25:     Attributes
+  26:     ----------
+  27:     figs : OrderedDict
+  28:         `OrderedDict` mapping numbers to managers; the active manager is at the
+  29:         end.
+  30:     """
+  31: 
+  32:     figs = OrderedDict()
+  33: 
+  34:     @classmethod
+  35:     def get_fig_manager(cls, num):
+  36:         """
+  37:         If manager number *num* exists, make it the active one and return it;
+  38:         otherwise return *None*.
+  39:         """
+  40:         manager = cls.figs.get(num, None)
+  41:         if manager is not None:
+  42:             cls.set_active(manager)
+  43:         return manager
+  44: 
+  45:     @classmethod
+  46:     def destroy(cls, num):
+  47:         """
+  48:         Destroy manager *num* -- either a manager instance or a manager number.
+  49: 
+  50:         In the interactive backends, this is bound to the window "destroy" and
+
+
+
+2025-10-08 21:52:04 - INFO - ================================== Ai Message ==================================
+Name: Locator
+
+Let me continue reading the `_pylab_helpers.py` file to understand the complete `Gcf` class implementation:
+
+#TOOL_CALL read_file_lines { "file_path": "/root/hy/projects_3/matplotlib/lib/matplotlib/_pylab_helpers.py", "start_line": 51, "end_line": 100 }
+
+
+2025-10-08 21:52:04 - INFO -    /\/ Tool Result:
+File: /root/hy/projects_3/matplotlib/lib/matplotlib/_pylab_helpers.py
+Total lines: 144
+Showing lines 51-100:
+
+  51:         "delete" events.
+  52: 
+  53:         It is recommended to pass a manager instance, to avoid confusion when
+  54:         two managers share the same number.
+  55:         """
+  56:         if all(hasattr(num, attr) for attr in ["num", "destroy"]):
+  57:             manager = num
+  58:             if cls.figs.get(manager.num) is manager:
+  59:                 cls.figs.pop(manager.num)
+  60:         else:
+  61:             try:
+  62:                 manager = cls.figs.pop(num)
+  63:             except KeyError:
+  64:                 return
+  65:         if hasattr(manager, "_cidgcf"):
+  66:             manager.canvas.mpl_disconnect(manager._cidgcf)
+  67:         manager.destroy()
+  68:         del manager, num
+  69:         # Full cyclic garbage collection may be too expensive to do on every
+  70:         # figure destruction, so we collect only the youngest two generations.
+  71:         # see: https://github.com/matplotlib/matplotlib/pull/3045
+  72:         gc.collect(1)
+  73: 
+  74:     @classmethod
+  75:     def destroy_fig(cls, fig):
+  76:         """Destroy figure *fig*."""
+  77:         num = next((manager.num for manager in cls.figs.values()
+  78:                     if manager.canvas.figure == fig), None)
+  79:         if num is not None:
+  80:             cls.destroy(num)
+  81: 
+  82:     @classmethod
+  83:     def destroy_all(cls):
+  84:         """Destroy all figures."""
+  85:         # Reimport gc in case the module globals have already been removed
+  86:         # during interpreter shutdown.
+  87:         import gc
+  88:         for manager in list(cls.figs.values()):
+  89:             manager.canvas.mpl_disconnect(manager._cidgcf)
+  90:             manager.destroy()
+  91:         cls.figs.clear()
+  92:         gc.collect(1)
+  93: 
+  94:     @classmethod
+  95:     def has_fignum(cls, num):
+  96:         """Return whether figure number *num* exists."""
+  97:         return num in cls.figs
+  98: 
+  99:     @classmethod
+ 100:     def get_all_fig_managers(cls):
+
+
+
+2025-10-08 21:52:09 - INFO - ================================== Ai Message ==================================
+Name: Locator
+
+Let me continue reading the rest of the `_pylab_helpers.py` file to see the complete implementation:
+
+#TOOL_CALL read_file_lines { "file_path": "/root/hy/projects_3/matplotlib/lib/matplotlib/_pylab_helpers.py", "start_line": 100, "end_line": 144 }
+
+
+2025-10-08 21:52:09 - INFO -    /\/ Tool Result:
+File: /root/hy/projects_3/matplotlib/lib/matplotlib/_pylab_helpers.py
+Total lines: 144
+Showing lines 100-144:
+
+ 100:     def get_all_fig_managers(cls):
+ 101:         """Return a list of figure managers."""
+ 102:         return list(cls.figs.values())
+ 103: 
+ 104:     @classmethod
+ 105:     def get_num_fig_managers(cls):
+ 106:         """Return the number of figures being managed."""
+ 107:         return len(cls.figs)
+ 108: 
+ 109:     @classmethod
+ 110:     def get_active(cls):
+ 111:         """Return the active manager, or *None* if there is no manager."""
+ 112:         return next(reversed(cls.figs.values())) if cls.figs else None
+ 113: 
+ 114:     @classmethod
+ 115:     def _set_new_active_manager(cls, manager):
+ 116:         """Adopt *manager* into pyplot and make it the active manager."""
+ 117:         if not hasattr(manager, "_cidgcf"):
+ 118:             manager._cidgcf = manager.canvas.mpl_connect(
+ 119:                 "button_press_event", lambda event: cls.set_active(manager))
+ 120:         fig = manager.canvas.figure
+ 121:         fig.number = manager.num
+ 122:         label = fig.get_label()
+ 123:         if label:
+ 124:             manager.set_window_title(label)
+ 125:         cls.set_active(manager)
+ 126: 
+ 127:     @classmethod
+ 128:     def set_active(cls, manager):
+ 129:         """Make *manager* the active manager."""
+ 130:         cls.figs[manager.num] = manager
+ 131:         cls.figs.move_to_end(manager.num)
+ 132: 
+ 133:     @classmethod
+ 134:     def draw_all(cls, force=False):
+ 135:         """
+ 136:         Redraw all stale managed figures, or, if *force* is True, all managed
+ 137:         figures.
+ 138:         """
+ 139:         for manager in cls.get_all_fig_managers():
+ 140:             if force or manager.canvas.figure.stale:
+ 141:                 manager.canvas.draw_idle()
+ 142: 
+ 143: 
+ 144: atexit.register(Gcf.destroy_all)
+
+
+
+2025-10-08 21:52:15 - INFO - ================================== Ai Message ==================================
+Name: Locator
+
+Now I need to understand where `get_backend()` is defined and how it might be affecting `Gcf.figs`. Let me search for the `get_backend` function:
+
+#TOOL_CALL search_code_with_context { "keyword": "def get_backend", "search_path": "/root/hy/projects_3/matplotlib/lib/matplotlib" }
+
+
+2025-10-08 21:52:15 - INFO -    /\/ Tool Result:
+Search results for 'def get_backend' in directory (showing first 1 matches):
+
+File: /root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py
+Lines 1167-1173:
+1167:     rcParams['backend'] = os.environ.get('MPLBACKEND')
+1168: 
+1169: 
+1170: def get_backend():
+1171:     """
+1172:     Return the name of the current backend.
+1173: 
+
+================================================================================
+
+
+
+
+2025-10-08 21:52:20 - INFO - ================================== Ai Message ==================================
+Name: Locator
+
+Let me read the complete `get_backend()` function to understand its implementation:
+
+#TOOL_CALL read_file_lines { "file_path": "/root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py", "start_line": 1170, "end_line": 1200 }
+
+
+2025-10-08 21:52:20 - INFO -    /\/ Tool Result:
+File: /root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py
+Total lines: 1459
+Showing lines 1170-1200:
+
+1170: def get_backend():
+1171:     """
+1172:     Return the name of the current backend.
+1173: 
+1174:     See Also
+1175:     --------
+1176:     matplotlib.use
+1177:     """
+1178:     return rcParams['backend']
+1179: 
+1180: 
+1181: def interactive(b):
+1182:     """
+1183:     Set whether to redraw after every plotting command (e.g. `.pyplot.xlabel`).
+1184:     """
+1185:     rcParams['interactive'] = b
+1186: 
+1187: 
+1188: def is_interactive():
+1189:     """
+1190:     Return whether to redraw after every plotting command.
+1191: 
+1192:     .. note::
+1193: 
+1194:         This function is only intended for use in backends. End users should
+1195:         use `.pyplot.isinteractive` instead.
+1196:     """
+1197:     return rcParams['interactive']
+1198: 
+1199: 
+1200: default_test_modules = [
+
+
+
+2025-10-08 21:52:20 - INFO - ================================ Summarize ================================
+
+
+2025-10-08 21:52:40 - INFO - ================================ Remove Message ================================
+
+
+
+
+2025-10-08 21:52:48 - INFO - ================================== Ai Message ==================================
+Name: Locator
+
+#REFLECT
+Based on the problem description and the code I've examined so far, I can see that:
+
+1. The `get_backend()` function itself is very simple - it just returns `rcParams['backend']`
+2. The bug occurs when figures are created under `rc_context` and then `get_backend()` is called
+3. The issue is that `Gcf.figs` gets cleared when `get_backend()` is called
+
+The key insight is that the problem likely isn't in `get_backend()` itself, but in some side effect that occurs when accessing `rcParams['backend']`. Since the issue involves `rc_context`, I need to investigate how `rcParams` access might trigger backend-related operations that clear figures.
+
+Let me search for `rc_context` to understand how it works and how it might interact with backend operations.
+
+#TOOL_CALL search_code_with_context { "keyword": "rc_context", "search_path": "/root/hy/projects_3/matplotlib/lib/matplotlib" }
+
+
+2025-10-08 21:52:48 - INFO -    /\/ Tool Result:
+Search results for 'rc_context' in directory (showing first 15 matches):
+
+File: /root/hy/projects_3/matplotlib/lib/matplotlib/backend_bases.py
+Lines 3219-3225:
+3219:             return
+3220:         # This import needs to happen here due to circular imports.
+3221:         from matplotlib.figure import Figure
+3222:         with mpl.rc_context({"toolbar": "none"}):  # No navbar for the toolfig.
+3223:             manager = type(self.canvas).new_manager(Figure(figsize=(6, 3)), -1)
+3224:         manager.set_window_title("Subplot configuration tool")
+3225:         tool_fig = manager.canvas.figure
+
+================================================================================
+
+File: /root/hy/projects_3/matplotlib/lib/matplotlib/animation.py
+Lines 1064-1070:
+1064:         # canvas._is_saving = True makes the draw_event animation-starting
+1065:         # callback a no-op; canvas.manager = None prevents resizing the GUI
+1066:         # widget (both are likewise done in savefig()).
+1067:         with mpl.rc_context({'savefig.bbox': None}), \
+1068:              writer.saving(self._fig, filename, dpi), \
+1069:              cbook._setattr_cm(self._fig.canvas,
+1070:                                _is_saving=True, manager=None):
+
+================================================================================
+
+File: /root/hy/projects_3/matplotlib/lib/matplotlib/widgets.py
+Lines 1297-1303:
+1297:             # If not using toolmanager, disable all keypress-related rcParams.
+1298:             # Avoid spurious warnings if keymaps are getting deprecated.
+1299:             with _api.suppress_matplotlib_deprecation_warning():
+1300:                 stack.enter_context(mpl.rc_context(
+1301:                     {k: [] for k in mpl.rcParams if k.startswith("keymap.")}))
+1302: 
+1303:     def stop_typing(self):
+
+================================================================================
+
+File: /root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py
+Lines 1055-1061:
+1055: 
+1056: 
+1057: @contextlib.contextmanager
+1058: def rc_context(rc=None, fname=None):
+1059:     """
+1060:     Return a context manager for temporarily changing rcParams.
+1061: 
+
+================================================================================
+
+File: /root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py
+Lines 1075-1081:
+1075:     --------
+1076:     Passing explicit values via a dict::
+1077: 
+1078:         with mpl.rc_context({'interactive': False}):
+1079:             fig, ax = plt.subplots()
+1080:             ax.plot(range(3), range(3))
+1081:             fig.savefig('example.png')
+
+================================================================================
+
+File: /root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py
+Lines 1083-1089:
+1083: 
+1084:     Loading settings from a file::
+1085: 
+1086:          with mpl.rc_context(fname='print.rc'):
+1087:              plt.plot(x, y)  # uses 'print.rc'
+1088: 
+1089:     """
+
+================================================================================
+
+File: /root/hy/projects_3/matplotlib/lib/matplotlib/backend_tools.py
+Lines 412-418:
+ 412:         # Trigger grid switching by temporarily setting :rc:`keymap.grid`
+ 413:         # to a unique key and sending an appropriate event.
+ 414:         with cbook._setattr_cm(event, key=sentinel), \
+ 415:              mpl.rc_context({'keymap.grid': sentinel}):
+ 416:             mpl.backend_bases.key_press_handler(event, self.figure.canvas)
+ 417: 
+ 418: 
+
+================================================================================
+
+File: /root/hy/projects_3/matplotlib/lib/matplotlib/backend_tools.py
+Lines 427-433:
+ 427:         # Trigger grid switching by temporarily setting :rc:`keymap.grid_minor`
+ 428:         # to a unique key and sending an appropriate event.
+ 429:         with cbook._setattr_cm(event, key=sentinel), \
+ 430:              mpl.rc_context({'keymap.grid_minor': sentinel}):
+ 431:             mpl.backend_bases.key_press_handler(event, self.figure.canvas)
+ 432: 
+ 433: 
+
+================================================================================
+
+File: /root/hy/projects_3/matplotlib/lib/matplotlib/pyplot.py
+Lines 586-592:
+ 586:     matplotlib.rc(group, **kwargs)
+ 587: 
+ 588: 
+ 589: @_copy_docstring_and_deprecators(matplotlib.rc_context)
+ 590: def rc_context(rc=None, fname=None):
+ 591:     return matplotlib.rc_context(rc, fname)
+ 592: 
+
+================================================================================
+
+File: /root/hy/projects_3/matplotlib/lib/matplotlib/pyplot.py
+Lines 587-593:
+ 587: 
+ 588: 
+ 589: @_copy_docstring_and_deprecators(matplotlib.rc_context)
+ 590: def rc_context(rc=None, fname=None):
+ 591:     return matplotlib.rc_context(rc, fname)
+ 592: 
+ 593: 
+
+================================================================================
+
+File: /root/hy/projects_3/matplotlib/lib/matplotlib/pyplot.py
+Lines 588-594:
+ 588: 
+ 589: @_copy_docstring_and_deprecators(matplotlib.rc_context)
+ 590: def rc_context(rc=None, fname=Non
+
+... [输出被截断，原始长度: 7060 字符，显示前 5000 字符]
+
+
+2025-10-08 21:52:53 - INFO - ================================== Ai Message ==================================
+Name: Locator
+
+Now let me examine the `rc_context` implementation to understand how it works:
+
+#TOOL_CALL read_file_lines { "file_path": "/root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py", "start_line": 1057, "end_line": 1120 }
+
+
+2025-10-08 21:52:53 - INFO -    /\/ Tool Result:
+File: /root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py
+Total lines: 1459
+Showing lines 1057-1106:
+
+1057: @contextlib.contextmanager
+1058: def rc_context(rc=None, fname=None):
+1059:     """
+1060:     Return a context manager for temporarily changing rcParams.
+1061: 
+1062:     Parameters
+1063:     ----------
+1064:     rc : dict
+1065:         The rcParams to temporarily set.
+1066:     fname : str or path-like
+1067:         A file with Matplotlib rc settings. If both *fname* and *rc* are given,
+1068:         settings from *rc* take precedence.
+1069: 
+1070:     See Also
+1071:     --------
+1072:     :ref:`customizing-with-matplotlibrc-files`
+1073: 
+1074:     Examples
+1075:     --------
+1076:     Passing explicit values via a dict::
+1077: 
+1078:         with mpl.rc_context({'interactive': False}):
+1079:             fig, ax = plt.subplots()
+1080:             ax.plot(range(3), range(3))
+1081:             fig.savefig('example.png')
+1082:             plt.close(fig)
+1083: 
+1084:     Loading settings from a file::
+1085: 
+1086:          with mpl.rc_context(fname='print.rc'):
+1087:              plt.plot(x, y)  # uses 'print.rc'
+1088: 
+1089:     """
+1090:     orig = rcParams.copy()
+1091:     try:
+1092:         if fname:
+1093:             rc_file(fname)
+1094:         if rc:
+1095:             rcParams.update(rc)
+1096:         yield
+1097:     finally:
+1098:         dict.update(rcParams, orig)  # Revert to the original rcs.
+1099: 
+1100: 
+1101: def use(backend, *, force=True):
+1102:     """
+1103:     Select the backend used for rendering and GUI integration.
+1104: 
+1105:     Parameters
+1106:     ----------
+
+
+
+2025-10-08 21:52:57 - INFO - ================================== Ai Message ==================================
+Name: Locator
+
+Now I need to examine the `use()` function since it's related to backend switching and might be involved in the issue:
+
+#TOOL_CALL read_file_lines { "file_path": "/root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py", "start_line": 1101, "end_line": 1170 }
+
+
+2025-10-08 21:52:57 - INFO -    /\/ Tool Result:
+File: /root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py
+Total lines: 1459
+Showing lines 1101-1150:
+
+1101: def use(backend, *, force=True):
+1102:     """
+1103:     Select the backend used for rendering and GUI integration.
+1104: 
+1105:     Parameters
+1106:     ----------
+1107:     backend : str
+1108:         The backend to switch to.  This can either be one of the standard
+1109:         backend names, which are case-insensitive:
+1110: 
+1111:         - interactive backends:
+1112:           GTK3Agg, GTK3Cairo, GTK4Agg, GTK4Cairo, MacOSX, nbAgg, QtAgg,
+1113:           QtCairo, TkAgg, TkCairo, WebAgg, WX, WXAgg, WXCairo, Qt5Agg, Qt5Cairo
+1114: 
+1115:         - non-interactive backends:
+1116:           agg, cairo, pdf, pgf, ps, svg, template
+1117: 
+1118:         or a string of the form: ``module://my.module.name``.
+1119: 
+1120:         Switching to an interactive backend is not possible if an unrelated
+1121:         event loop has already been started (e.g., switching to GTK3Agg if a
+1122:         TkAgg window has already been opened).  Switching to a non-interactive
+1123:         backend is always possible.
+1124: 
+1125:     force : bool, default: True
+1126:         If True (the default), raise an `ImportError` if the backend cannot be
+1127:         set up (either because it fails to import, or because an incompatible
+1128:         GUI interactive framework is already running); if False, silently
+1129:         ignore the failure.
+1130: 
+1131:     See Also
+1132:     --------
+1133:     :ref:`backends`
+1134:     matplotlib.get_backend
+1135:     """
+1136:     name = validate_backend(backend)
+1137:     # don't (prematurely) resolve the "auto" backend setting
+1138:     if rcParams._get_backend_or_none() == name:
+1139:         # Nothing to do if the requested backend is already set
+1140:         pass
+1141:     else:
+1142:         # if pyplot is not already imported, do not import it.  Doing
+1143:         # so may trigger a `plt.switch_backend` to the _default_ backend
+1144:         # before we get a chance to change to the one the user just requested
+1145:         plt = sys.modules.get('matplotlib.pyplot')
+1146:         # if pyplot is imported, then try to change backends
+1147:         if plt is not None:
+1148:             try:
+1149:                 # we need this import check here to re-raise if the
+1150:                 # user does not have the libraries to support their
+
+
+
+2025-10-08 21:53:01 - INFO - ================================== Ai Message ==================================
+Name: Locator
+
+Let me continue reading the `use()` function to see its complete implementation:
+
+#TOOL_CALL read_file_lines { "file_path": "/root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py", "start_line": 1150, "end_line": 1170 }
+
+
+2025-10-08 21:53:01 - INFO -    /\/ Tool Result:
+File: /root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py
+Total lines: 1459
+Showing lines 1150-1170:
+
+1150:                 # user does not have the libraries to support their
+1151:                 # chosen backend installed.
+1152:                 plt.switch_backend(name)
+1153:             except ImportError:
+1154:                 if force:
+1155:                     raise
+1156:         # if we have not imported pyplot, then we can set the rcParam
+1157:         # value which will be respected when the user finally imports
+1158:         # pyplot
+1159:         else:
+1160:             rcParams['backend'] = backend
+1161:     # if the user has asked for a given backend, do not helpfully
+1162:     # fallback
+1163:     rcParams['backend_fallback'] = False
+1164: 
+1165: 
+1166: if os.environ.get('MPLBACKEND'):
+1167:     rcParams['backend'] = os.environ.get('MPLBACKEND')
+1168: 
+1169: 
+1170: def get_backend():
+
+
+
+2025-10-08 21:53:06 - INFO - ================================== Ai Message ==================================
+Name: Locator
+
+Now I need to look at the `switch_backend` function in pyplot since that's what gets called from `use()` when pyplot is already imported. Let me search for it:
+
+#TOOL_CALL search_code_with_context { "keyword": "def switch_backend", "search_path": "/root/hy/projects_3/matplotlib/lib/matplotlib/pyplot.py" }
+
+
+2025-10-08 21:53:06 - INFO -    /\/ Tool Result:
+Search results for 'def switch_backend' in file (showing first 1 matches):
+
+File: /root/hy/projects_3/matplotlib/lib/matplotlib/pyplot.py
+Lines 206-212:
+ 206:     return _backend_mod
+ 207: 
+ 208: 
+ 209: def switch_backend(newbackend):
+ 210:     """
+ 211:     Close all open figures and set the Matplotlib backend.
+ 212: 
+
+================================================================================
+
+
+
+
+2025-10-08 21:53:10 - INFO - ================================== Ai Message ==================================
+Name: Locator
+
+Perfect! Now I found the key function. Let me read the complete `switch_backend` function:
+
+#TOOL_CALL read_file_lines { "file_path": "/root/hy/projects_3/matplotlib/lib/matplotlib/pyplot.py", "start_line": 209, "end_line": 280 }
+
+
+2025-10-08 21:53:10 - INFO -    /\/ Tool Result:
+File: /root/hy/projects_3/matplotlib/lib/matplotlib/pyplot.py
+Total lines: 3236
+Showing lines 209-258:
+
+ 209: def switch_backend(newbackend):
+ 210:     """
+ 211:     Close all open figures and set the Matplotlib backend.
+ 212: 
+ 213:     The argument is case-insensitive.  Switching to an interactive backend is
+ 214:     possible only if no event loop for another interactive backend has started.
+ 215:     Switching to and from non-interactive backends is always possible.
+ 216: 
+ 217:     Parameters
+ 218:     ----------
+ 219:     newbackend : str
+ 220:         The name of the backend to use.
+ 221:     """
+ 222:     global _backend_mod
+ 223:     # make sure the init is pulled up so we can assign to it later
+ 224:     import matplotlib.backends
+ 225:     close("all")
+ 226: 
+ 227:     if newbackend is rcsetup._auto_backend_sentinel:
+ 228:         current_framework = cbook._get_running_interactive_framework()
+ 229:         mapping = {'qt': 'qtagg',
+ 230:                    'gtk3': 'gtk3agg',
+ 231:                    'gtk4': 'gtk4agg',
+ 232:                    'wx': 'wxagg',
+ 233:                    'tk': 'tkagg',
+ 234:                    'macosx': 'macosx',
+ 235:                    'headless': 'agg'}
+ 236: 
+ 237:         best_guess = mapping.get(current_framework, None)
+ 238:         if best_guess is not None:
+ 239:             candidates = [best_guess]
+ 240:         else:
+ 241:             candidates = []
+ 242:         candidates += [
+ 243:             "macosx", "qtagg", "gtk4agg", "gtk3agg", "tkagg", "wxagg"]
+ 244: 
+ 245:         # Don't try to fallback on the cairo-based backends as they each have
+ 246:         # an additional dependency (pycairo) over the agg-based backend, and
+ 247:         # are of worse quality.
+ 248:         for candidate in candidates:
+ 249:             try:
+ 250:                 switch_backend(candidate)
+ 251:             except ImportError:
+ 252:                 continue
+ 253:             else:
+ 254:                 rcParamsOrig['backend'] = candidate
+ 255:                 return
+ 256:         else:
+ 257:             # Switching to Agg should always succeed; if it doesn't, let the
+ 258:             # exception propagate out.
+
+
+
+2025-10-08 21:53:10 - INFO - ================================ Summarize ================================
+
+
+2025-10-08 21:53:40 - INFO - ================================ Remove Message ================================
+
+
+
+
+2025-10-08 21:53:50 - INFO - ================================== Ai Message ==================================
+Name: Locator
+
+#REFLECT
+
+Now I have a clear understanding of the bug. Let me analyze what I've discovered:
+
+**The Bug Mechanism:**
+1. When a figure is created under `rc_context`, it gets stored in `Gcf.figs`
+2. When `get_backend()` is called, it accesses `rcParams['backend']`
+3. Under certain conditions, this triggers backend switching logic that calls `switch_backend()`
+4. `switch_backend()` calls `close("all")` on line 225, which clears all figures from `Gcf.figs`
+
+**Key Evidence:**
+- Line 225 in `switch_backend()`: `close("all")` - this is the smoking gun
+- The function documentation even says "Close all open figures and set the Matplotlib backend"
+- This explains why figures disappear from `Gcf.figs` when `get_backend()` is called
+
+**The Root Cause:**
+The issue is that `get_backend()` is somehow triggering backend switching when it shouldn't. It should be a simple getter that just returns the current backend, but under certain conditions (when figures are created under `rc_context`), it's triggering the backend switching mechanism.
+
+I need to investigate what triggers the backend switching when `get_backend()` is called. Let me look at the `use()` function more carefully to understand the conditions that cause backend switching.
+
+#TOOL_CALL read_file_lines { "file_path": "/root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py", "start_line": 1101, "end_line": 1163 }
+
+
+2025-10-08 21:53:50 - INFO -    /\/ Tool Result:
+File: /root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py
+Total lines: 1459
+Showing lines 1101-1150:
+
+1101: def use(backend, *, force=True):
+1102:     """
+1103:     Select the backend used for rendering and GUI integration.
+1104: 
+1105:     Parameters
+1106:     ----------
+1107:     backend : str
+1108:         The backend to switch to.  This can either be one of the standard
+1109:         backend names, which are case-insensitive:
+1110: 
+1111:         - interactive backends:
+1112:           GTK3Agg, GTK3Cairo, GTK4Agg, GTK4Cairo, MacOSX, nbAgg, QtAgg,
+1113:           QtCairo, TkAgg, TkCairo, WebAgg, WX, WXAgg, WXCairo, Qt5Agg, Qt5Cairo
+1114: 
+1115:         - non-interactive backends:
+1116:           agg, cairo, pdf, pgf, ps, svg, template
+1117: 
+1118:         or a string of the form: ``module://my.module.name``.
+1119: 
+1120:         Switching to an interactive backend is not possible if an unrelated
+1121:         event loop has already been started (e.g., switching to GTK3Agg if a
+1122:         TkAgg window has already been opened).  Switching to a non-interactive
+1123:         backend is always possible.
+1124: 
+1125:     force : bool, default: True
+1126:         If True (the default), raise an `ImportError` if the backend cannot be
+1127:         set up (either because it fails to import, or because an incompatible
+1128:         GUI interactive framework is already running); if False, silently
+1129:         ignore the failure.
+1130: 
+1131:     See Also
+1132:     --------
+1133:     :ref:`backends`
+1134:     matplotlib.get_backend
+1135:     """
+1136:     name = validate_backend(backend)
+1137:     # don't (prematurely) resolve the "auto" backend setting
+1138:     if rcParams._get_backend_or_none() == name:
+1139:         # Nothing to do if the requested backend is already set
+1140:         pass
+1141:     else:
+1142:         # if pyplot is not already imported, do not import it.  Doing
+1143:         # so may trigger a `plt.switch_backend` to the _default_ backend
+1144:         # before we get a chance to change to the one the user just requested
+1145:         plt = sys.modules.get('matplotlib.pyplot')
+1146:         # if pyplot is imported, then try to change backends
+1147:         if plt is not None:
+1148:             try:
+1149:                 # we need this import check here to re-raise if the
+1150:                 # user does not have the libraries to support their
+
+
+
+2025-10-08 21:53:54 - INFO - ================================== Ai Message ==================================
+Name: Locator
+
+Now I need to see the rest of the `use()` function to understand the complete logic:
+
+#TOOL_CALL read_file_lines { "file_path": "/root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py", "start_line": 1150, "end_line": 1163 }
+
+
+2025-10-08 21:53:54 - INFO -    /\/ Tool Result:
+File: /root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py
+Total lines: 1459
+Showing lines 1150-1163:
+
+1150:                 # user does not have the libraries to support their
+1151:                 # chosen backend installed.
+1152:                 plt.switch_backend(name)
+1153:             except ImportError:
+1154:                 if force:
+1155:                     raise
+1156:         # if we have not imported pyplot, then we can set the rcParam
+1157:         # value which will be respected when the user finally imports
+1158:         # pyplot
+1159:         else:
+1160:             rcParams['backend'] = backend
+1161:     # if the user has asked for a given backend, do not helpfully
+1162:     # fallback
+1163:     rcParams['backend_fallback'] = False
+
+
+
+2025-10-08 21:54:03 - INFO - ================================== Ai Message ==================================
+Name: Locator
+
+#REFLECT
+
+Now I have a complete understanding of the bug mechanism. Let me analyze what's happening:
+
+**The Bug Chain:**
+1. A figure is created under `rc_context()` and stored in `Gcf.figs`
+2. When `get_backend()` is called, it accesses `rcParams['backend']`
+3. This somehow triggers the `use()` function logic
+4. In `use()`, line 1138 checks: `if rcParams._get_backend_or_none() == name:`
+5. If pyplot is imported (line 1147), it calls `plt.switch_backend(name)` (line 1152)
+6. `switch_backend()` calls `close("all")` (line 225), clearing all figures
+
+**The Key Issue:**
+The problem seems to be that when figures are created under `rc_context`, there's some backend state inconsistency that causes `get_backend()` to trigger backend switching logic.
+
+I need to investigate what `rcParams._get_backend_or_none()` does and how it might be different from the current backend when figures are created under `rc_context`. This is likely the trigger condition.
+
+#TOOL_CALL search_code_with_context { "keyword": "_get_backend_or_none", "search_path": "/root/hy/projects_3/matplotlib/lib/matplotlib" }
+
+
+2025-10-08 21:54:03 - INFO -    /\/ Tool Result:
+Search results for '_get_backend_or_none' in directory (showing first 5 matches):
+
+File: /root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py
+Lines 678-684:
+ 678: 
+ 679:         return dict.__getitem__(self, key)
+ 680: 
+ 681:     def _get_backend_or_none(self):
+ 682:         """Get the requested backend, if any, without triggering resolution."""
+ 683:         backend = dict.__getitem__(self, "backend")
+ 684:         return None if backend is rcsetup._auto_backend_sentinel else backend
+
+================================================================================
+
+File: /root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py
+Lines 1135-1141:
+1135:     """
+1136:     name = validate_backend(backend)
+1137:     # don't (prematurely) resolve the "auto" backend setting
+1138:     if rcParams._get_backend_or_none() == name:
+1139:         # Nothing to do if the requested backend is already set
+1140:         pass
+1141:     else:
+
+================================================================================
+
+File: /root/hy/projects_3/matplotlib/lib/matplotlib/pyplot.py
+Lines 2195-2201:
+2195: # requested, ignore rcParams['backend'] and force selection of a backend that
+2196: # is compatible with the current running interactive framework.
+2197: if (rcParams["backend_fallback"]
+2198:         and rcParams._get_backend_or_none() in (
+2199:             set(_interactive_bk) - {'WebAgg', 'nbAgg'})
+2200:         and cbook._get_running_interactive_framework()):
+2201:     dict.__setitem__(rcParams, "backend", rcsetup._auto_backend_sentinel)
+
+================================================================================
+
+File: /root/hy/projects_3/matplotlib/lib/matplotlib/backends/qt_compat.py
+Lines 47-53:
+  47:     QT_API = QT_API_PYSIDE2
+  48: # Otherwise, check the QT_API environment variable (from Enthought).  This can
+  49: # only override the binding, not the backend (in other words, we check that the
+  50: # requested backend actually matches).  Use _get_backend_or_none to avoid
+  51: # triggering backend resolution (which can result in a partially but
+  52: # incompletely imported backend_qt5).
+  53: elif (mpl.rcParams._get_backend_or_none() or "").lower().startswith("qt5"):
+
+================================================================================
+
+File: /root/hy/projects_3/matplotlib/lib/matplotlib/backends/qt_compat.py
+Lines 50-56:
+  50: # requested backend actually matches).  Use _get_backend_or_none to avoid
+  51: # triggering backend resolution (which can result in a partially but
+  52: # incompletely imported backend_qt5).
+  53: elif (mpl.rcParams._get_backend_or_none() or "").lower().startswith("qt5"):
+  54:     if QT_API_ENV in ["pyqt5", "pyside2"]:
+  55:         QT_API = _ETS[QT_API_ENV]
+  56:     else:
+
+================================================================================
+
+
+
+
+2025-10-08 21:54:08 - INFO - ================================== Ai Message ==================================
+Name: Locator
+
+Now I need to understand how `get_backend()` might be triggering backend switching. Let me look at the `get_backend()` function again and see if it has any side effects:
+
+#TOOL_CALL read_file_lines { "file_path": "/root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py", "start_line": 1170, "end_line": 1180 }
+
+
+2025-10-08 21:54:08 - INFO -    /\/ Tool Result:
+File: /root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py
+Total lines: 1459
+Showing lines 1170-1180:
+
+1170: def get_backend():
+1171:     """
+1172:     Return the name of the current backend.
+1173: 
+1174:     See Also
+1175:     --------
+1176:     matplotlib.use
+1177:     """
+1178:     return rcParams['backend']
+1179: 
+1180: 
+
+
+
+2025-10-08 21:54:23 - INFO - ================================== Ai Message ==================================
+Name: Locator
+
+#REFLECT
+
+Now I have a complete understanding of the bug. Let me analyze the key findings:
+
+**The Bug Mechanism:**
+1. When a figure is created under `rc_context()`, it gets stored in `Gcf.figs`
+2. When `get_backend()` is called, it simply returns `rcParams['backend']`
+3. However, accessing `rcParams['backend']` can trigger backend resolution/switching logic
+4. This eventually calls `switch_backend()` which calls `close("all")` on line 225
+5. `close("all")` clears all figures from `Gcf.figs`
+
+**The Root Cause:**
+The issue is that `get_backend()` is not truly a simple getter - accessing `rcParams['backend']` can have side effects that trigger backend switching, especially when there are inconsistencies in backend state after using `rc_context()`.
+
+**Key Locations Identified:**
+
+1. **Line 1178** in `/root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py` - The `get_backend()` function that accesses `rcParams['backend']`
+
+2. **Line 225** in `/root/hy/projects_3/matplotlib/lib/matplotlib/pyplot.py` - The `close("all")` call in `switch_backend()` that clears all figures
+
+3. **Lines 1138-1152** in `/root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py` - The `use()` function logic that triggers backend switching
+
+4. **Lines 1057-1098** in `/root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py` - The `rc_context()` implementation that temporarily changes rcParams
+
+5. **Lines 681-684** in `/root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py` - The `_get_backend_or_none()` method that's used to check backend state
+
+**The Fix Strategy:**
+The fix should make `get_backend()` truly side-effect-free by using `_get_backend_or_none()` or similar approach to avoid triggering backend resolution/switching.
+
+**INFO ENOUGH**
+
+Based on my investigation, I have identified the precise locations where the bug manifests:
+
+1. **Lines 1170-1178** in `/root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py` - The `get_backend()` function that triggers the bug by accessing `rcParams['backend']`
+
+2. **Line 225** in `/root/hy/projects_3/matplotlib/lib/matplotlib/pyplot.py` - The `close("all")` call in `switch_backend()` that actually clears the figures
+
+3. **Lines 1138-1152** in `/root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py` - The backend switching logic in `use()` function that gets triggered
+
+4. **Lines 681-684** in `/root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py` - The `_get_backend_or_none()` method that could be used for a side-effect-free backend getter
+
+5. **Lines 1057-1098** in `/root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py` - The `rc_context()` implementation that creates the conditions for the bug
+
+The bug occurs because `get_backend()` is not truly a getter - it can trigger backend switching logic that clears all figures. The fix should make `get_backend()` side-effect-free.
+================================ Human Message =================================
+
+If you think current information is enough to understand the root cause of the bug, add 'PROPOSE LOCATION' in your response to propose your location.
+
+
+2025-10-08 21:54:33 - INFO - ================================== Ai Message ==================================
+Name: Locator
+
+PROPOSE LOCATION
+
+Based on my investigation, I have identified the root cause of the bug. The issue is that `get_backend()` is not truly a side-effect-free getter - it accesses `rcParams['backend']` which can trigger backend resolution and switching logic, ultimately calling `close("all")` that clears all figures from `Gcf.figs`.
+
+The bug occurs specifically when figures are created under `rc_context()` because this creates a temporary backend state that gets resolved when `get_backend()` accesses `rcParams['backend']`, triggering the backend switching mechanism.
+
+Here are the suspicious locations:
+
+```json
+{
+    "locations": [
+        {
+            "file_path": "/root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py",
+            "start_line": 1170,
+            "end_line": 1178
+        },
+        {
+            "file_path": "/root/hy/projects_3/matplotlib/lib/matplotlib/pyplot.py",
+            "start_line": 209,
+            "end_line": 225
+        },
+        {
+            "file_path": "/root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py",
+            "start_line": 1138,
+            "end_line": 1152
+        },
+        {
+            "file_path": "/root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py",
+            "start_line": 681,
+            "end_line": 684
+        },
+        {
+            "file_path": "/root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py",
+            "start_line": 1057,
+            "end_line": 1098
+        }
+    ]
+}
+```
+
+**INFO ENOUGH**
+================================ Human Message =================================
+
+If you think current information is enough to understand the root cause of the bug, add 'PROPOSE LOCATION' in your response to propose your location.
+
+
+2025-10-08 21:55:09 - INFO - ================================ Remove Message ================================
+
+
+
+
+2025-10-08 21:55:22 - INFO - ================================== Ai Message ==================================
+Name: Suggester
+
+PROPOSE SUGGESTIONS
+
+Based on my complete analysis of the bug, I understand the root cause and the interconnected nature of these locations. The bug occurs because `get_backend()` triggers backend switching logic that clears all figures when there are backend state inconsistencies created by `rc_context()`.
+
+Here are my coordinated repair suggestions:
+
+1. **Location 1 (`/root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py`, lines 1170-1178)**: Modify `get_backend()` to use a side-effect-free approach. Instead of directly returning `rcParams['backend']`, use `rcParams._get_backend_or_none()` or implement similar logic to avoid triggering backend resolution. This is the primary fix that prevents the cascade of events leading to figure clearing.
+
+2. **Location 2 (`/root/hy/projects_3/matplotlib/lib/matplotlib/pyplot.py`, lines 209-225)**: Consider adding a check in `switch_backend()` before calling `close("all")` to determine if backend switching is actually necessary, or provide an option to preserve existing figures when the switch is triggered by a simple getter operation rather than an explicit user request.
+
+3. **Location 3 (`/root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py`, lines 1138-1152)**: Enhance the backend switching logic in `use()` to be more conservative about when to trigger `switch_backend()`. The current logic should better distinguish between explicit backend changes and incidental backend access that shouldn't trigger switching.
+
+4. **Location 4 (`/root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py`, lines 681-684)**: This `_get_backend_or_none()` method provides the pattern for side-effect-free backend access. It should be leveraged by `get_backend()` to avoid triggering backend resolution when the backend is in an auto-detection state.
+
+5. **Location 5 (`/root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py`, lines 1057-1098)**: The `rc_context()` implementation creates temporary backend states that contribute to the inconsistency. Consider adding better state management or documentation about the interaction between context managers and backend getters.
+
+The primary fix should be in Location 1, making `get_backend()` truly side-effect-free, which will prevent the chain reaction that leads to figure clearing in the other locations.
+================================ Human Message =================================
+
+According to the suggestions provided earlier, please review the following code segments:
+
+[Location 1] /root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py lines 1170-1178
+--------------------------------------------------------------------------------------
+def get_backend():
+    """
+    Return the name of the current backend.
+
+    See Also
+    --------
+    matplotlib.use
+    """
+    return rcParams['backend']
+
+
+[Location 2] /root/hy/projects_3/matplotlib/lib/matplotlib/pyplot.py lines 209-225
+----------------------------------------------------------------------------------
+def switch_backend(newbackend):
+    """
+    Close all open figures and set the Matplotlib backend.
+
+    The argument is case-insensitive.  Switching to an interactive backend is
+    possible only if no event loop for another interactive backend has started.
+    Switching to and from non-interactive backends is always possible.
+
+    Parameters
+    ----------
+    newbackend : str
+        The name of the backend to use.
+    """
+    global _backend_mod
+    # make sure the init is pulled up so we can assign to it later
+    import matplotlib.backends
+    close("all")
+
+
+[Location 3] /root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py lines 1138-1152
+--------------------------------------------------------------------------------------
+    if rcParams._get_backend_or_none() == name:
+        # Nothing to do if the requested backend is already set
+        pass
+    else:
+        # if pyplot is not already imported, do not import it.  Doing
+        # so may trigger a `plt.switch_backend` to the _default_ backend
+        # before we get a chance to change to the one the user just requested
+        plt = sys.modules.get('matplotlib.pyplot')
+        # if pyplot is imported, then try to change backends
+        if plt is not None:
+            try:
+                # we need this import check here to re-raise if the
+                # user does not have the libraries to support their
+                # chosen backend installed.
+                plt.switch_backend(name)
+
+
+[Location 4] /root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py lines 681-684
+------------------------------------------------------------------------------------
+    def _get_backend_or_none(self):
+        """Get the requested backend, if any, without triggering resolution."""
+        backend = dict.__getitem__(self, "backend")
+        return None if backend is rcsetup._auto_backend_sentinel else backend
+
+
+[Location 5] /root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py lines 1057-1098
+--------------------------------------------------------------------------------------
+@contextlib.contextmanager
+def rc_context(rc=None, fname=None):
+    """
+    Return a context manager for temporarily changing rcParams.
+
+    Parameters
+    ----------
+    rc : dict
+        The rcParams to temporarily set.
+    fname : str or path-like
+        A file with Matplotlib rc settings. If both *fname* and *rc* are given,
+        settings from *rc* take precedence.
+
+    See Also
+    --------
+    :ref:`customizing-with-matplotlibrc-files`
+
+    Examples
+    --------
+    Passing explicit values via a dict::
+
+        with mpl.rc_context({'interactive': False}):
+            fig, ax = plt.subplots()
+            ax.plot(range(3), range(3))
+            fig.savefig('example.png')
+            plt.close(fig)
+
+    Loading settings from a file::
+
+         with mpl.rc_context(fname='print.rc'):
+             plt.plot(x, y)  # uses 'print.rc'
+
+    """
+    orig = rcParams.copy()
+    try:
+        if fname:
+            rc_file(fname)
+        if rc:
+            rcParams.update(rc)
+        yield
+    finally:
+        dict.update(rcParams, orig)  # Revert to the original rcs.
+
+
+Based on the suggestion, do you think these locations are ready for fixing?
+If yes, please respond with '**CONTINUE TO FIX**' and then you will switch to Fixer state, proceed to implement the fix later.
+If not, explain why and state that further clarification is needed.
+
+
+2025-10-08 21:55:31 - INFO - ================================== Ai Message ==================================
+Name: Suggester
+
+Looking at the code segments and the bug description, I can see the complete picture of how this bug occurs:
+
+1. **Location 1** shows `get_backend()` directly accessing `rcParams['backend']`, which can trigger backend resolution
+2. **Location 2** shows `switch_backend()` calling `close("all")` which clears all figures
+3. **Location 3** shows the logic that triggers `switch_backend()` when backend states don't match
+4. **Location 4** shows `_get_backend_or_none()` which provides side-effect-free backend access
+5. **Location 5** shows `rc_context()` which creates temporary backend state changes
+
+The bug chain is clear:
+- `rc_context()` creates temporary backend state
+- `get_backend()` accesses `rcParams['backend']` which triggers backend resolution
+- This leads to `switch_backend()` being called
+- `switch_backend()` calls `close("all")` clearing all figures from `Gcf.figs`
+
+The fix is straightforward: modify `get_backend()` to use a side-effect-free approach like `_get_backend_or_none()` to avoid triggering backend switching when it's just meant to be a simple getter.
+
+All the necessary code locations are present and the interconnections are clear. The primary fix needs to be in Location 1, with Location 4 providing the pattern for side-effect-free access.
+
+**CONTINUE TO FIX**
+================================ Human Message =================================
+
+[Location 1] /root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py lines 1170-1178
+
+Imports in this file: You can select the functions that may be needed to assist with the repair.
+  import matplotlib.pyplot as plt
+  import atexit
+  from collections import namedtuple
+  from collections.abc import MutableMapping
+  import contextlib
+  import functools
+  import importlib
+  import inspect
+  from inspect import Parameter
+  import locale
+  import logging
+  import os
+  from pathlib import Path
+  import pprint
+  import re
+  import shutil
+  import subprocess
+  import sys
+  import tempfile
+  import warnings
+  import numpy
+  from packaging.version import parse as parse_version
+  from . import _api, _version, cbook, _docstring, rcsetup
+  from matplotlib.cbook import sanitize_sequence
+  from matplotlib._api import MatplotlibDeprecationWarning
+  from matplotlib.rcsetup import validate_backend, cycler
+  import setuptools_scm
+  from . import ft2font
+  import winreg
+  from matplotlib import pyplot as plt
+  import certifi
+  import ssl
+  import urllib.request
+  import matplotlib as mpl
+  from .style.core import STYLE_BLACKLIST
+  from .style.core import STYLE_BLACKLIST
+  from .style.core import STYLE_BLACKLIST
+  from matplotlib import ft2font
+  import pytest
+  from matplotlib.cm import _colormaps as colormaps
+  from matplotlib.colors import _color_sequences as color_sequences
+
+When generating patches, **do NOT add duplicate imports** that already exist in the above list.
+
+The following is the code content with context ([R] marks vulnerability lines, [C] marks context lines):
+--------------------------------------------------------------------------------------
+[C] 1160:             rcParams['backend'] = backend
+[C] 1161:     # if the user has asked for a given backend, do not helpfully
+[C] 1162:     # fallback
+[C] 1163:     rcParams['backend_fallback'] = False
+[C] 1164: 
+[C] 1165: 
+[C] 1166: if os.environ.get('MPLBACKEND'):
+[C] 1167:     rcParams['backend'] = os.environ.get('MPLBACKEND')
+[C] 1168: 
+[C] 1169: 
+[R] 1170: def get_backend():
+[R] 1171:     """
+[R] 1172:     Return the name of the current backend.
+[R] 1173: 
+[R] 1174:     See Also
+[R] 1175:     --------
+[R] 1176:     matplotlib.use
+[R] 1177:     """
+[R] 1178:     return rcParams['backend']
+[C] 1179: 
+[C] 1180: 
+[C] 1181: def interactive(b):
+[C] 1182:     """
+[C] 1183:     Set whether to redraw after every plotting command (e.g. `.pyplot.xlabel`).
+[C] 1184:     """
+[C] 1185:     rcParams['interactive'] = b
+[C] 1186: 
+[C] 1187: 
+[C] 1188: def is_interactive():
+
+
+[Location 2] /root/hy/projects_3/matplotlib/lib/matplotlib/pyplot.py lines 209-225
+
+Imports in this file: You can select the functions that may be needed to assist with the repair.
+  import numpy as np
+  import matplotlib.pyplot as plt
+  import numpy as np
+  import matplotlib.pyplot as plt
+  from enum import Enum
+  import functools
+  import importlib
+  import inspect
+  import logging
+  from numbers import Number
+  import re
+  import sys
+  import threading
+  import time
+  from cycler import cycler
+  import matplotlib
+  import matplotlib.colorbar
+  import matplotlib.image
+  from matplotlib import _api
+  from matplotlib import rcsetup, style
+  from matplotlib import _pylab_helpers, interactive
+  from matplotlib import cbook
+  from matplotlib import _docstring
+  from matplotlib.backend_bases import FigureCanvasBase, MouseButton
+  from matplotlib.figure import Figure, FigureBase, figaspect
+  from matplotlib.gridspec import GridSpec, SubplotSpec
+  from matplotlib import rcParams, rcParamsDefault, get_backend, rcParamsOrig
+  from matplotlib.rcsetup import interactive_bk as _interactive_bk
+  from matplotlib.artist import Artist
+  from matplotlib.axes import Axes, Subplot
+  from matplotlib.projections import PolarAxes
+  from matplotlib import mlab  # for detrend_none, window_hanning
+  from matplotlib.scale import get_scale_names
+  from matplotlib import cm
+  from matplotlib.cm import _colormaps as colormaps, get_cmap, register_cmap
+  from matplotlib.colors import _color_sequences as color_sequences
+  import numpy as np
+  from matplotlib.colors import Normalize
+  from matplotlib.lines import Line2D
+  from matplotlib.text import Text, Annotation
+  from matplotlib.patches import Polygon, Rectangle, Circle, Arrow
+  from matplotlib.widgets import Button, Slider, Widget
+  from .ticker import (
+  from IPython.core.pylabtools import backend2gui
+  from IPython import get_ipython
+  import matplotlib.backends
+  from matplotlib import patheffects
+  import matplotlib.pyplot as plt
+
+When generating patches, **do NOT add duplicate imports** that already exist in the above list.
+
+The following is the code content with context ([R] marks vulnerability lines, [C] marks context lines):
+----------------------------------------------------------------------------------
+[C]  199:     This is currently private, but may be made public in the future.
+[C]  200:     """
+[C]  201:     if _backend_mod is None:
+[C]  202:         # Use __getitem__ here to avoid going through the fallback logic (which
+[C]  203:         # will (re)import pyplot and then call switch_backend if we need to
+[C]  204:         # resolve the auto sentinel)
+[C]  205:         switch_backend(dict.__getitem__(rcParams, "backend"))
+[C]  206:     return _backend_mod
+[C]  207: 
+[C]  208: 
+[R]  209: def switch_backend(newbackend):
+[R]  210:     """
+[R]  211:     Close all open figures and set the Matplotlib backend.
+[R]  212: 
+[R]  213:     The argument is case-insensitive.  Switching to an interactive backend is
+[R]  214:     possible only if no event loop for another interactive backend has started.
+[R]  215:     Switching to and from non-interactive backends is always possible.
+[R]  216: 
+[R]  217:     Parameters
+[R]  218:     ----------
+[R]  219:     newbackend : str
+[R]  220:         The name of the backend to use.
+[R]  221:     """
+[R]  222:     global _backend_mod
+[R]  223:     # make sure the init is pulled up so we can assign to it later
+[R]  224:     import matplotlib.backends
+[R]  225:     close("all")
+[C]  226: 
+[C]  227:     if newbackend is rcsetup._auto_backend_sentinel:
+[C]  228:         current_framework = cbook._get_running_interactive_framework()
+[C]  229:         mapping = {'qt': 'qtagg',
+[C]  230:                    'gtk3': 'gtk3agg',
+[C]  231:                    'gtk4': 'gtk4agg',
+[C]  232:                    'wx': 'wxagg',
+[C]  233:                    'tk': 'tkagg',
+[C]  234:                    'macosx': 'macosx',
+[C]  235:                    'headless': 'agg'}
+
+
+[Location 3] /root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py lines 1138-1152
+
+Imports in this file: You can select the functions that may be needed to assist with the repair.
+  import matplotlib.pyplot as plt
+  import atexit
+  from collections import namedtuple
+  from collections.abc import MutableMapping
+  import contextlib
+  import functools
+  import importlib
+  import inspect
+  from inspect import Parameter
+  import locale
+  import logging
+  import os
+  from pathlib import Path
+  import pprint
+  import re
+  import shutil
+  import subprocess
+  import sys
+  import tempfile
+  import warnings
+  import numpy
+  from packaging.version import parse as parse_version
+  from . import _api, _version, cbook, _docstring, rcsetup
+  from matplotlib.cbook import sanitize_sequence
+  from matplotlib._api import MatplotlibDeprecationWarning
+  from matplotlib.rcsetup import validate_backend, cycler
+  import setuptools_scm
+  from . import ft2font
+  import winreg
+  from matplotlib import pyplot as plt
+  import certifi
+  import ssl
+  import urllib.request
+  import matplotlib as mpl
+  from .style.core import STYLE_BLACKLIST
+  from .style.core import STYLE_BLACKLIST
+  from .style.core import STYLE_BLACKLIST
+  from matplotlib import ft2font
+  import pytest
+  from matplotlib.cm import _colormaps as colormaps
+  from matplotlib.colors import _color_sequences as color_sequences
+
+When generating patches, **do NOT add duplicate imports** that already exist in the above list.
+
+The following is the code content with context ([R] marks vulnerability lines, [C] marks context lines):
+--------------------------------------------------------------------------------------
+[C] 1128:         GUI interactive framework is already running); if False, silently
+[C] 1129:         ignore the failure.
+[C] 1130: 
+[C] 1131:     See Also
+[C] 1132:     --------
+[C] 1133:     :ref:`backends`
+[C] 1134:     matplotlib.get_backend
+[C] 1135:     """
+[C] 1136:     name = validate_backend(backend)
+[C] 1137:     # don't (prematurely) resolve the "auto" backend setting
+[R] 1138:     if rcParams._get_backend_or_none() == name:
+[R] 1139:         # Nothing to do if the requested backend is already set
+[R] 1140:         pass
+[R] 1141:     else:
+[R] 1142:         # if pyplot is not already imported, do not import it.  Doing
+[R] 1143:         # so may trigger a `plt.switch_backend` to the _default_ backend
+[R] 1144:         # before we get a chance to change to the one the user just requested
+[R] 1145:         plt = sys.modules.get('matplotlib.pyplot')
+[R] 1146:         # if pyplot is imported, then try to change backends
+[R] 1147:         if plt is not None:
+[R] 1148:             try:
+[R] 1149:                 # we need this import check here to re-raise if the
+[R] 1150:                 # user does not have the libraries to support their
+[R] 1151:                 # chosen backend installed.
+[R] 1152:                 plt.switch_backend(name)
+[C] 1153:             except ImportError:
+[C] 1154:                 if force:
+[C] 1155:                     raise
+[C] 1156:         # if we have not imported pyplot, then we can set the rcParam
+[C] 1157:         # value which will be respected when the user finally imports
+[C] 1158:         # pyplot
+[C] 1159:         else:
+[C] 1160:             rcParams['backend'] = backend
+[C] 1161:     # if the user has asked for a given backend, do not helpfully
+[C] 1162:     # fallback
+
+
+[Location 4] /root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py lines 681-684
+
+Imports in this file: You can select the functions that may be needed to assist with the repair.
+  import matplotlib.pyplot as plt
+  import atexit
+  from collections import namedtuple
+  from collections.abc import MutableMapping
+  import contextlib
+  import functools
+  import importlib
+  import inspect
+  from inspect import Parameter
+  import locale
+  import logging
+  import os
+  from pathlib import Path
+  import pprint
+  import re
+  import shutil
+  import subprocess
+  import sys
+  import tempfile
+  import warnings
+  import numpy
+  from packaging.version import parse as parse_version
+  from . import _api, _version, cbook, _docstring, rcsetup
+  from matplotlib.cbook import sanitize_sequence
+  from matplotlib._api import MatplotlibDeprecationWarning
+  from matplotlib.rcsetup import validate_backend, cycler
+  import setuptools_scm
+  from . import ft2font
+  import winreg
+  from matplotlib import pyplot as plt
+  import certifi
+  import ssl
+  import urllib.request
+  import matplotlib as mpl
+  from .style.core import STYLE_BLACKLIST
+  from .style.core import STYLE_BLACKLIST
+  from .style.core import STYLE_BLACKLIST
+  from matplotlib import ft2font
+  import pytest
+  from matplotlib.cm import _colormaps as colormaps
+  from matplotlib.colors import _color_sequences as color_sequences
+
+When generating patches, **do NOT add duplicate imports** that already exist in the above list.
+
+The following is the code content with context ([R] marks vulnerability lines, [C] marks context lines):
+------------------------------------------------------------------------------------
+[C]  671:         # In theory, this should only ever be used after the global rcParams
+[C]  672:         # has been set up, but better be safe e.g. in presence of breakpoints.
+[C]  673:         elif key == "backend" and self is globals().get("rcParams"):
+[C]  674:             val = dict.__getitem__(self, key)
+[C]  675:             if val is rcsetup._auto_backend_sentinel:
+[C]  676:                 from matplotlib import pyplot as plt
+[C]  677:                 plt.switch_backend(rcsetup._auto_backend_sentinel)
+[C]  678: 
+[C]  679:         return dict.__getitem__(self, key)
+[C]  680: 
+[R]  681:     def _get_backend_or_none(self):
+[R]  682:         """Get the requested backend, if any, without triggering resolution."""
+[R]  683:         backend = dict.__getitem__(self, "backend")
+[R]  684:         return None if backend is rcsetup._auto_backend_sentinel else backend
+[C]  685: 
+[C]  686:     def __repr__(self):
+[C]  687:         class_name = self.__class__.__name__
+[C]  688:         indent = len(class_name) + 1
+[C]  689:         with _api.suppress_matplotlib_deprecation_warning():
+[C]  690:             repr_split = pprint.pformat(dict(self), indent=1,
+[C]  691:                                         width=80 - indent).split('\n')
+[C]  692:         repr_indented = ('\n' + ' ' * indent).join(repr_split)
+[C]  693:         return '{}({})'.format(class_name, repr_indented)
+[C]  694: 
+
+
+[Location 5] /root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py lines 1057-1098
+
+Imports in this file: You can select the functions that may be needed to assist with the repair.
+  import matplotlib.pyplot as plt
+  import atexit
+  from collections import namedtuple
+  from collections.abc import MutableMapping
+  import contextlib
+  import functools
+  import importlib
+  import inspect
+  from inspect import Parameter
+  import locale
+  import logging
+  import os
+  from pathlib import Path
+  import pprint
+  import re
+  import shutil
+  import subprocess
+  import sys
+  import tempfile
+  import warnings
+  import numpy
+  from packaging.version import parse as parse_version
+  from . import _api, _version, cbook, _docstring, rcsetup
+  from matplotlib.cbook import sanitize_sequence
+  from matplotlib._api import MatplotlibDeprecationWarning
+  from matplotlib.rcsetup import validate_backend, cycler
+  import setuptools_scm
+  from . import ft2font
+  import winreg
+  from matplotlib import pyplot as plt
+  import certifi
+  import ssl
+  import urllib.request
+  import matplotlib as mpl
+  from .style.core import STYLE_BLACKLIST
+  from .style.core import STYLE_BLACKLIST
+  from .style.core import STYLE_BLACKLIST
+  from matplotlib import ft2font
+  import pytest
+  from matplotlib.cm import _colormaps as colormaps
+  from matplotlib.colors import _color_sequences as color_sequences
+
+When generating patches, **do NOT add duplicate imports** that already exist in the above list.
+
+The following is the code content with context ([R] marks vulnerability lines, [C] marks context lines):
+--------------------------------------------------------------------------------------
+[C] 1047:     # Deprecation warnings were already handled in rc_params_from_file, no need
+[C] 1048:     # to reemit them here.
+[C] 1049:     with _api.suppress_matplotlib_deprecation_warning():
+[C] 1050:         from .style.core import STYLE_BLACKLIST
+[C] 1051:         rc_from_file = rc_params_from_file(
+[C] 1052:             fname, use_default_template=use_default_template)
+[C] 1053:         rcParams.update({k: rc_from_file[k] for k in rc_from_file
+[C] 1054:                          if k not in STYLE_BLACKLIST})
+[C] 1055: 
+[C] 1056: 
+[R] 1057: @contextlib.contextmanager
+[R] 1058: def rc_context(rc=None, fname=None):
+[R] 1059:     """
+[R] 1060:     Return a context manager for temporarily changing rcParams.
+[R] 1061: 
+[R] 1062:     Parameters
+[R] 1063:     ----------
+[R] 1064:     rc : dict
+[R] 1065:         The rcParams to temporarily set.
+[R] 1066:     fname : str or path-like
+[R] 1067:         A file with Matplotlib rc settings. If both *fname* and *rc* are given,
+[R] 1068:         settings from *rc* take precedence.
+[R] 1069: 
+[R] 1070:     See Also
+[R] 1071:     --------
+[R] 1072:     :ref:`customizing-with-matplotlibrc-files`
+[R] 1073: 
+[R] 1074:     Examples
+[R] 1075:     --------
+[R] 1076:     Passing explicit values via a dict::
+[R] 1077: 
+[R] 1078:         with mpl.rc_context({'interactive': False}):
+[R] 1079:             fig, ax = plt.subplots()
+[R] 1080:             ax.plot(range(3), range(3))
+[R] 1081:             fig.savefig('example.png')
+[R] 1082:             plt.close(fig)
+[R] 1083: 
+[R] 1084:     Loading settings from a file::
+[R] 1085: 
+[R] 1086:          with mpl.rc_context(fname='print.rc'):
+[R] 1087:              plt.plot(x, y)  # uses 'print.rc'
+[R] 1088: 
+[R] 1089:     """
+[R] 1090:     orig = rcParams.copy()
+[R] 1091:     try:
+[R] 1092:         if fname:
+[R] 1093:             rc_file(fname)
+[R] 1094:         if rc:
+[R] 1095:             rcParams.update(rc)
+[R] 1096:         yield
+[R] 1097:     finally:
+[R] 1098:         dict.update(rcParams, orig)  # Revert to the original rcs.
+[C] 1099: 
+[C] 1100: 
+[C] 1101: def use(backend, *, force=True):
+[C] 1102:     """
+[C] 1103:     Select the backend used for rendering and GUI integration.
+[C] 1104: 
+[C] 1105:     Parameters
+[C] 1106:     ----------
+[C] 1107:     backend : str
+[C] 1108:         The backend to switch to.  This can either be one of the standard
+
+You must pay close attention to **indentation** — especially the relative indentation level between the patch and its parent scope (for example, the containing class or function).
+⚠️ **Observe the leading whitespace of the content above** and indent your patch to match its context; do not always produce flush-left code.
+⚠️ **Do not combine fixes for different locations into one block** — every location's fix should be in a **separate** ```python```code block.
+
+Here are the suggestions from the Suggester:
+S
+
+Based on my complete analysis of the bug, I understand the root cause and the interconnected nature of these locations. The bug occurs because `get_backend()` triggers backend switching logic that clears all figures when there are backend state inconsistencies created by `rc_context()`.
+
+Here are my coordinated repair suggestions:
+
+1. **Location 1 (`/root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py`, lines 1170-1178)**: Modify `get_backend()` to use a side-effect-free approach. Instead of directly returning `rcParams['backend']`, use `rcParams._get_backend_or_none()` or implement similar logic to avoid triggering backend resolution. This is the primary fix that prevents the cascade of events leading to figure clearing.
+
+2. **Location 2 (`/root/hy/projects_3/matplotlib/lib/matplotlib/pyplot.py`, lines 209-225)**: Consider adding a check in `switch_backend()` before calling `close("all")` to determine if backend switching is actually necessary, or provide an option to preserve existing figures when the switch is triggered by a simple getter operation rather than an explicit user request.
+
+3. **Location 3 (`/root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py`, lines 1138-1152)**: Enhance the backend switching logic in `use()` to be more conservative about when to trigger `switch_backend()`. The current logic should better distinguish between explicit backend changes and incidental backend access that shouldn't trigger switching.
+
+4. **Location 4 (`/root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py`, lines 681-684)**: This `_get_backend_or_none()` method provides the pattern for side-effect-free backend access. It should be leveraged by `get_backend()` to avoid triggering backend resolution when the backend is in an auto-detection state.
+
+5. **Location 5 (`/root/hy/projects_3/matplotlib/lib/matplotlib/__init__.py`, lines 1057-1098)**: The `rc_context()` implementation creates temporary backend states that contribute to the inconsistency. Consider adding better state management or documentation about the interaction between context managers and backend getters.
+
+The primary fix should be in Location 1, making `get_backend()` truly side-effect-free, which will prevent the chain reaction that leads to figure clearing in the other locations.
+
+You may search or reference other code if necessary.
+
+**When you're ready, start your reply with '#PROPOSE PATCH' and then include all  code blocks.**
+#PROPOSE PATCH
+```python
+<patch_1>
+```
+```python
+<patch_2>
+```
+...
+
+
+
+2025-10-08 22:00:16 - INFO - ================================== Ai Message ==================================
+Name: Fixer
+
+#PROPOSE PATCH
+
+Based on my analysis, the root cause is that `get_backend()` directly accesses `rcParams['backend']` which can trigger backend resolution and switching logic. The primary fix is to make `get_backend()` truly side-effect-free by using the existing `_get_backend_or_none()` method pattern.
+
+```python
+def get_backend():
+    """
+    Return the name of the current backend.
+
+    See Also
+    --------
+    matplotlib.use
+    """
+    # Use side-effect-free access to avoid triggering backend switching
+    # when the backend is in auto-detection state
+    backend = rcParams._get_backend_or_none()
+    if backend is None:
+        # If backend is auto-sentinel, we need to resolve it, but we should
+        # do so without triggering figure clearing
+        backend = dict.__getitem__(rcParams, "backend")
+        if backend is rcsetup._auto_backend_sentinel:
+            # Import here to avoid circular imports
+            from matplotlib import pyplot as plt
+            # Get the resolved backend without switching
+            plt._get_backend_mod()
+            backend = dict.__getitem__(rcParams, "backend")
+    return backend
+```
+
+```python
+def switch_backend(newbackend):
+    """
+    Close all open figures and set the Matplotlib backend.
+
+    The argument is case-insensitive.  Switching to an interactive backend is
+    possible only if no event loop for another interactive backend has started.
+    Switching to and from non-interactive backends is always possible.
+
+    Parameters
+    ----------
+    newbackend : str
+        The name of the backend to use.
+    """
+    global _backend_mod
+    # make sure the init is pulled up so we can assign to it later
+    import matplotlib.backends
+    close("all")
+```
+
+```python
+    if rcParams._get_backend_or_none() == name:
+        # Nothing to do if the requested backend is already set
+        pass
+    else:
+        # if pyplot is not already imported, do not import it.  Doing
+        # so may trigger a `plt.switch_backend` to the _default_ backend
+        # before we get a chance to change to the one the user just requested
+        plt = sys.modules.get('matplotlib.pyplot')
+        # if pyplot is imported, then try to change backends
+        if plt is not None:
+            try:
+                # we need this import check here to re-raise if the
+                # user does not have the libraries to support their
+                # chosen backend installed.
+                plt.switch_backend(name)
+```
+
+```python
+    def _get_backend_or_none(self):
+        """Get the requested backend, if any, without triggering resolution."""
+        backend = dict.__getitem__(self, "backend")
+        return None if backend is rcsetup._auto_backend_sentinel else backend
+```
+
+```python
+@contextlib.contextmanager
+def rc_context(rc=None, fname=None):
+    """
+    Return a context manager for temporarily changing rcParams.
+
+    Parameters
+    ----------
+    rc : dict
+        The rcParams to temporarily set.
+    fname : str or path-like
+        A file with Matplotlib rc settings. If both *fname* and *rc* are given,
+        settings from *rc* take precedence.
+
+    See Also
+    --------
+    :ref:`customizing-with-matplotlibrc-files`
+
+    Examples
+    --------
+    Passing explicit values via a dict::
+
+        with mpl.rc_context({'interactive': False}):
+            fig, ax = plt.subplots()
+            ax.plot(range(3), range(3))
+            fig.savefig('example.png')
+            plt.close(fig)
+
+    Loading settings from a file::
+
+         with mpl.rc_context(fname='print.rc'):
+             plt.plot(x, y)  # uses 'print.rc'
+
+    """
+    orig = rcParams.copy()
+    try:
+        if fname:
+            rc_file(fname)
+        if rc:
+            rcParams.update(rc)
+        yield
+    finally:
+        dict.update(rcParams, orig)  # Revert to the original rcs.
+```
+
+

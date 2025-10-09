@@ -19,7 +19,7 @@ def record_api_call(
     """Record API call statistics"""
     api_call_record = {
         "timestamp": datetime.now().isoformat(),
-        "model_name": model_name,
+        "model_name": "claude-3-5-sonnet-20241022",
         "prompt": prompt,
         "response": response,
         "prompt_tokens": prompt_tokens,

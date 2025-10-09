@@ -9,7 +9,7 @@ PROJECT_NAME = settings.PROJECT_NAME
 
 current_dir = Path(__file__).parent.parent
 # parquet_path = current_dir / "dataset.parquet"
-parquet_path = current_dir / "dataset" /"verified.parquet"
+parquet_path = current_dir / "dataset" /"lite.parquet"
 df = pd.read_parquet(parquet_path)
 
 CONF_PATH = '/root/hy/neo4j-community-5.26.6/conf/neo4j.conf'

@@ -1,0 +1,643 @@
+2025-10-08 17:17:32 - INFO - Logger initialized - log file: /root/hy/isea/logs/without_kg_Claude-3.5-Sonnet_round_c_4/django__django-14672_2025-10-08_17-17-31.log
+2025-10-08 17:17:37 - INFO - ================================== Ai Message ==================================
+Name: Locator
+
+I'll help you find and fix the bug related to the missing `make_hashable` call on `through_fields` in `ManyToManyRel`. Let me start by exploring the project structure to understand the codebase.
+
+#TOOL_CALL explore_directory { "dir_path": "/root/hy/projects_4/django" }
+
+
+2025-10-08 17:17:37 - INFO -    /\/ Tool Result:
+Contents of /root/hy/projects_4/django:
+.editorconfig
+.eslintignore
+.eslintrc
+.gitattributes
+.github/
+.gitignore
+.pre-commit-config.yaml
+.tx/
+AUTHORS
+CONTRIBUTING.rst
+Gruntfile.js
+INSTALL
+LICENSE
+LICENSE.python
+MANIFEST.in
+README.rst
+django/
+docs/
+extras/
+js_tests/
+package.json
+pyproject.toml
+scripts/
+setup.cfg
+setup.py
+tests/
+tox.ini
+
+
+
+2025-10-08 17:17:43 - INFO - ================================== Ai Message ==================================
+Name: Locator
+
+#REFLECT
+Based on the problem description, I need to find the bug in Django's `ManyToManyRel` class where there's a missing `make_hashable` call on `through_fields`. The error occurs in `/django/db/models/fields/reverse_related.py` at line 140 in the `__hash__` method when trying to hash `self.identity`, and the issue is that `through_fields` can be a list which is unhashable.
+
+Let me start by exploring the Django source code structure to locate the relevant files.
+
+#TOOL_CALL explore_directory { "dir_path": "/root/hy/projects_4/django/django" }
+
+
+2025-10-08 17:17:43 - INFO -    /\/ Tool Result:
+Contents of /root/hy/projects_4/django/django:
+__init__.py
+__main__.py
+apps/
+conf/
+contrib/
+core/
+db/
+dispatch/
+forms/
+http/
+middleware/
+shortcuts.py
+template/
+templatetags/
+test/
+urls/
+utils/
+views/
+
+
+
+2025-10-08 17:17:47 - INFO - ================================== Ai Message ==================================
+Name: Locator
+
+Now let me explore the db/models directory to find the reverse_related.py file mentioned in the error:
+
+#TOOL_CALL explore_directory { "dir_path": "/root/hy/projects_4/django/django/db" }
+
+
+2025-10-08 17:17:47 - INFO -    /\/ Tool Result:
+Contents of /root/hy/projects_4/django/django/db:
+__init__.py
+backends/
+migrations/
+models/
+transaction.py
+utils.py
+
+
+
+2025-10-08 17:17:54 - INFO - ================================== Ai Message ==================================
+Name: Locator
+
+Now let me explore the models directory to find the fields subdirectory:
+
+#TOOL_CALL explore_directory { "dir_path": "/root/hy/projects_4/django/django/db/models" }
+
+
+2025-10-08 17:17:54 - INFO -    /\/ Tool Result:
+Contents of /root/hy/projects_4/django/django/db/models:
+__init__.py
+aggregates.py
+base.py
+constants.py
+constraints.py
+deletion.py
+enums.py
+expressions.py
+fields/
+functions/
+indexes.py
+lookups.py
+manager.py
+options.py
+query.py
+query_utils.py
+signals.py
+sql/
+utils.py
+
+
+
+2025-10-08 17:17:58 - INFO - ================================== Ai Message ==================================
+Name: Locator
+
+Now let me explore the fields directory to find the reverse_related.py file:
+
+#TOOL_CALL explore_directory { "dir_path": "/root/hy/projects_4/django/django/db/models/fields" }
+
+
+2025-10-08 17:17:58 - INFO -    /\/ Tool Result:
+Contents of /root/hy/projects_4/django/django/db/models/fields:
+__init__.py
+files.py
+json.py
+mixins.py
+proxy.py
+related.py
+related_descriptors.py
+related_lookups.py
+reverse_related.py
+
+
+
+2025-10-08 17:18:04 - INFO - ================================== Ai Message ==================================
+Name: Locator
+
+Perfect! Now I found the reverse_related.py file. Let me examine it to understand the current implementation and locate the bug:
+
+#TOOL_CALL read_file_lines { "file_path": "/root/hy/projects_4/django/django/db/models/fields/reverse_related.py", "start_line": 1, "end_line": 50 }
+
+
+2025-10-08 17:18:04 - INFO -    /\/ Tool Result:
+File: /root/hy/projects_4/django/django/db/models/fields/reverse_related.py
+Total lines: 330
+Showing lines 1-50:
+
+   1: """
+   2: "Rel objects" for related fields.
+   3: 
+   4: "Rel objects" (for lack of a better name) carry information about the relation
+   5: modeled by a related field and provide some utility functions. They're stored
+   6: in the ``remote_field`` attribute of the field.
+   7: 
+   8: They also act as reverse fields for the purposes of the Meta API because
+   9: they're the closest concept currently available.
+  10: """
+  11: 
+  12: from django.core import exceptions
+  13: from django.utils.functional import cached_property
+  14: from django.utils.hashable import make_hashable
+  15: 
+  16: from . import BLANK_CHOICE_DASH
+  17: from .mixins import FieldCacheMixin
+  18: 
+  19: 
+  20: class ForeignObjectRel(FieldCacheMixin):
+  21:     """
+  22:     Used by ForeignObject to store information about the relation.
+  23: 
+  24:     ``_meta.get_fields()`` returns this class to provide access to the field
+  25:     flags for the reverse relation.
+  26:     """
+  27: 
+  28:     # Field flags
+  29:     auto_created = True
+  30:     concrete = False
+  31:     editable = False
+  32:     is_relation = True
+  33: 
+  34:     # Reverse relations are always nullable (Django can't enforce that a
+  35:     # foreign key on the related model points to this model).
+  36:     null = True
+  37:     empty_strings_allowed = False
+  38: 
+  39:     def __init__(self, field, to, related_name=None, related_query_name=None,
+  40:                  limit_choices_to=None, parent_link=False, on_delete=None):
+  41:         self.field = field
+  42:         self.model = to
+  43:         self.related_name = related_name
+  44:         self.related_query_name = related_query_name
+  45:         self.limit_choices_to = {} if limit_choices_to is None else limit_choices_to
+  46:         self.parent_link = parent_link
+  47:         self.on_delete = on_delete
+  48: 
+  49:         self.symmetrical = False
+  50:         self.multiple = True
+
+
+
+2025-10-08 17:18:09 - INFO - ================================== Ai Message ==================================
+Name: Locator
+
+Now I can see the import of `make_hashable` at line 14. Let me look at the `__hash__` method around line 140 where the error occurs:
+
+#TOOL_CALL read_file_lines { "file_path": "/root/hy/projects_4/django/django/db/models/fields/reverse_related.py", "start_line": 130, "end_line": 150 }
+
+
+2025-10-08 17:18:09 - INFO -    /\/ Tool Result:
+File: /root/hy/projects_4/django/django/db/models/fields/reverse_related.py
+Total lines: 330
+Showing lines 130-150:
+
+ 130:             self.multiple,
+ 131:         )
+ 132: 
+ 133:     def __eq__(self, other):
+ 134:         if not isinstance(other, self.__class__):
+ 135:             return NotImplemented
+ 136:         return self.identity == other.identity
+ 137: 
+ 138:     def __hash__(self):
+ 139:         return hash(self.identity)
+ 140: 
+ 141:     def get_choices(
+ 142:         self, include_blank=True, blank_choice=BLANK_CHOICE_DASH,
+ 143:         limit_choices_to=None, ordering=(),
+ 144:     ):
+ 145:         """
+ 146:         Return choices with a default blank choices included, for use
+ 147:         as <select> choices for this field.
+ 148: 
+ 149:         Analog of django.db.models.fields.Field.get_choices(), provided
+ 150:         initially for utilization by RelatedFieldListFilter.
+
+
+
+2025-10-08 17:18:14 - INFO - ================================== Ai Message ==================================
+Name: Locator
+
+Now I need to find the `ManyToManyRel` class and its `identity` property. Let me search for it in the file:
+
+#TOOL_CALL search_code_with_context { "keyword": "class ManyToManyRel", "search_path": "/root/hy/projects_4/django/django/db/models/fields/reverse_related.py" }
+
+
+2025-10-08 17:18:14 - INFO -    /\/ Tool Result:
+Search results for 'class ManyToManyRel' in file (showing first 1 matches):
+
+File: /root/hy/projects_4/django/django/db/models/fields/reverse_related.py
+Lines 277-283:
+ 277:         self.multiple = False
+ 278: 
+ 279: 
+ 280: class ManyToManyRel(ForeignObjectRel):
+ 281:     """
+ 282:     Used by ManyToManyField to store information about the relation.
+ 283: 
+
+================================================================================
+
+
+
+
+2025-10-08 17:18:14 - INFO - ================================ Summarize ================================
+
+
+2025-10-08 17:18:30 - INFO - ================================ Remove Message ================================
+
+
+
+
+2025-10-08 17:18:34 - INFO - ================================== Ai Message ==================================
+Name: Locator
+
+Now I need to examine the `ManyToManyRel` class to see its `identity` property. Let me read more of the class:
+
+#TOOL_CALL read_file_lines { "file_path": "/root/hy/projects_4/django/django/db/models/fields/reverse_related.py", "start_line": 280, "end_line": 330 }
+
+
+2025-10-08 17:18:34 - INFO -    /\/ Tool Result:
+File: /root/hy/projects_4/django/django/db/models/fields/reverse_related.py
+Total lines: 330
+Showing lines 280-329:
+
+ 280: class ManyToManyRel(ForeignObjectRel):
+ 281:     """
+ 282:     Used by ManyToManyField to store information about the relation.
+ 283: 
+ 284:     ``_meta.get_fields()`` returns this class to provide access to the field
+ 285:     flags for the reverse relation.
+ 286:     """
+ 287: 
+ 288:     def __init__(self, field, to, related_name=None, related_query_name=None,
+ 289:                  limit_choices_to=None, symmetrical=True, through=None,
+ 290:                  through_fields=None, db_constraint=True):
+ 291:         super().__init__(
+ 292:             field, to,
+ 293:             related_name=related_name,
+ 294:             related_query_name=related_query_name,
+ 295:             limit_choices_to=limit_choices_to,
+ 296:         )
+ 297: 
+ 298:         if through and not db_constraint:
+ 299:             raise ValueError("Can't supply a through model and db_constraint=False")
+ 300:         self.through = through
+ 301: 
+ 302:         if through_fields and not through:
+ 303:             raise ValueError("Cannot specify through_fields without a through model")
+ 304:         self.through_fields = through_fields
+ 305: 
+ 306:         self.symmetrical = symmetrical
+ 307:         self.db_constraint = db_constraint
+ 308: 
+ 309:     @property
+ 310:     def identity(self):
+ 311:         return super().identity + (
+ 312:             self.through,
+ 313:             self.through_fields,
+ 314:             self.db_constraint,
+ 315:         )
+ 316: 
+ 317:     def get_related_field(self):
+ 318:         """
+ 319:         Return the field in the 'to' object to which this relationship is tied.
+ 320:         Provided for symmetry with ManyToOneRel.
+ 321:         """
+ 322:         opts = self.through._meta
+ 323:         if self.through_fields:
+ 324:             field = opts.get_field(self.through_fields[0])
+ 325:         else:
+ 326:             for field in opts.fields:
+ 327:                 rel = getattr(field, 'remote_field', None)
+ 328:                 if rel and rel.model == self.model:
+ 329:                     break
+
+
+
+2025-10-08 17:18:42 - INFO - ================================== Ai Message ==================================
+Name: Locator
+
+Perfect! I found the exact bug. Looking at the code, I can see:
+
+1. **The Problem**: In the `ManyToManyRel.identity` property (lines 310-315), `self.through_fields` is directly included in the tuple without being made hashable. When `through_fields` is a list (like `['child', 'parent']` in the example), it causes a `TypeError: unhashable type: 'list'` when the `__hash__` method tries to hash the identity tuple.
+
+2. **The Solution**: The `make_hashable` function is already imported at line 14, but it's not being used on `through_fields` in the `ManyToManyRel.identity` property.
+
+Let me also check the parent class to see how `make_hashable` is used there for comparison:
+
+#TOOL_CALL search_code_with_context { "keyword": "make_hashable", "search_path": "/root/hy/projects_4/django/django/db/models/fields/reverse_related.py" }
+
+
+2025-10-08 17:18:42 - INFO -    /\/ Tool Result:
+Search results for 'make_hashable' in file (showing first 2 matches):
+
+File: /root/hy/projects_4/django/django/db/models/fields/reverse_related.py
+Lines 11-17:
+  11: 
+  12: from django.core import exceptions
+  13: from django.utils.functional import cached_property
+  14: from django.utils.hashable import make_hashable
+  15: 
+  16: from . import BLANK_CHOICE_DASH
+  17: from .mixins import FieldCacheMixin
+
+================================================================================
+
+File: /root/hy/projects_4/django/django/db/models/fields/reverse_related.py
+Lines 123-129:
+ 123:             self.model,
+ 124:             self.related_name,
+ 125:             self.related_query_name,
+ 126:             make_hashable(self.limit_choices_to),
+ 127:             self.parent_link,
+ 128:             self.on_delete,
+ 129:             self.symmetrical,
+
+================================================================================
+
+
+
+
+2025-10-08 17:18:54 - INFO - ================================== Ai Message ==================================
+Name: Locator
+
+Perfect! I now have all the information needed to identify the bug location. Let me analyze what I've found:
+
+## Analysis
+
+1. **The Bug**: In the `ManyToManyRel.identity` property (lines 310-315), `self.through_fields` is included directly in the tuple without being wrapped with `make_hashable()`. When `through_fields` is a list (like `['child', 'parent']`), it causes a `TypeError: unhashable type: 'list'` when the `__hash__` method tries to hash the identity tuple.
+
+2. **The Evidence**: 
+   - Line 14: `make_hashable` is imported but not used for `through_fields`
+   - Line 126: `make_hashable(self.limit_choices_to)` shows the correct pattern in the parent class
+   - Line 313: `self.through_fields` is used directly without `make_hashable()` 
+   - Line 139: `return hash(self.identity)` fails when identity contains unhashable lists
+
+3. **The Fix**: Line 313 needs to be changed from `self.through_fields,` to `make_hashable(self.through_fields),`
+
+## Bug Location
+
+Based on my analysis of the Django codebase, I have identified the precise location where the missing `make_hashable` call needs to be added:
+
+**File**: `/root/hy/projects_4/django/django/db/models/fields/reverse_related.py`
+
+**Location**: Line 313 in the `ManyToManyRel.identity` property
+
+The bug is in the `identity` property of the `ManyToManyRel` class where `self.through_fields` is included in the tuple without being wrapped with `make_hashable()`. When `through_fields` is a list (as shown in the problem description with `through_fields=['child', 'parent']`), it causes a `TypeError: unhashable type: 'list'` when the `__hash__` method at line 139 tries to hash the identity tuple.
+
+The fix is simple: change line 313 from:
+```python
+self.through_fields,
+```
+to:
+```python
+make_hashable(self.through_fields),
+```
+
+This follows the same pattern already used for `self.limit_choices_to` at line 126 in the parent class.
+
+**INFO ENOUGH**
+================================ Human Message =================================
+
+If you think current information is enough to understand the root cause of the bug, add 'PROPOSE LOCATION' in your response to propose your location.
+
+
+2025-10-08 17:19:01 - INFO - ================================== Ai Message ==================================
+Name: Locator
+
+**PROPOSE LOCATION**
+
+Based on my thorough analysis of the Django codebase and the problem description, I have identified the exact location where the missing `make_hashable` call needs to be added.
+
+The bug is in the `ManyToManyRel.identity` property where `self.through_fields` is included in the tuple without being wrapped with `make_hashable()`. When `through_fields` is a list (like `['child', 'parent']` in the problem description), it causes a `TypeError: unhashable type: 'list'` when the `__hash__` method tries to hash the identity tuple.
+
+The evidence shows:
+1. Line 14: `make_hashable` is imported but not used for `through_fields`
+2. Line 126: `make_hashable(self.limit_choices_to)` shows the correct pattern in the parent class
+3. Line 313: `self.through_fields` is used directly without `make_hashable()`
+4. Line 139: `return hash(self.identity)` fails when identity contains unhashable lists
+
+```json
+{
+    "locations": [
+        {
+            "file_path": "/root/hy/projects_4/django/django/db/models/fields/reverse_related.py",
+            "start_line": 309,
+            "end_line": 315
+        }
+    ]
+}
+```
+
+
+2025-10-08 17:19:12 - INFO - ================================== Ai Message ==================================
+Name: Suggester
+
+#REFLECT
+
+Perfect! Now I have the complete context. The problem statement confirms exactly what I found in my analysis:
+
+1. **Root Cause**: The `ManyToManyRel.identity` property includes `self.through_fields` directly without wrapping it with `make_hashable()`. When `through_fields` is a list (like `['child', 'parent']` in the example), it causes a `TypeError: unhashable type: 'list'` when the `__hash__` method tries to hash the identity tuple.
+
+2. **Error Location**: Line 140 in `/root/hy/projects_4/django/django/db/models/fields/reverse_related.py` where `return hash(self.identity)` fails.
+
+3. **Bug Location**: Lines 309-315 in the `ManyToManyRel.identity` property where `self.through_fields` is included without `make_hashable()`.
+
+4. **Solution**: Change line 313 from `self.through_fields,` to `make_hashable(self.through_fields),`
+
+The suspicious location provided (lines 309-315) matches exactly with my analysis. This is the `identity` property of `ManyToManyRel` class where the fix needs to be applied.
+
+PROPOSE SUGGESTIONS
+
+1. **Line 313 in ManyToManyRel.identity property**: Change `self.through_fields,` to `make_hashable(self.through_fields),` to ensure that when `through_fields` is a list (like `['child', 'parent']`), it gets converted to a hashable tuple before being included in the identity tuple. This follows the same pattern already used for `self.limit_choices_to` at line 126 in the parent class and will prevent the `TypeError: unhashable type: 'list'` when the `__hash__` method at line 139 tries to hash the identity.
+================================ Human Message =================================
+
+According to the suggestions provided earlier, please review the following code segments:
+
+[Location 1] /root/hy/projects_4/django/django/db/models/fields/reverse_related.py lines 309-315
+------------------------------------------------------------------------------------------------
+    @property
+    def identity(self):
+        return super().identity + (
+            self.through,
+            self.through_fields,
+            self.db_constraint,
+        )
+
+
+Based on the suggestion, do you think these locations are ready for fixing?
+If yes, please respond with '**CONTINUE TO FIX**' and then you will switch to Fixer state, proceed to implement the fix later.
+If not, explain why and state that further clarification is needed.
+
+
+2025-10-08 17:19:21 - INFO - ================================== Ai Message ==================================
+Name: Suggester
+
+#REFLECT
+
+Looking at the code segment provided, I can see the exact location where the bug exists:
+
+**Location 1**: `/root/hy/projects_4/django/django/db/models/fields/reverse_related.py` lines 309-315
+
+The code shows:
+```python
+@property
+def identity(self):
+    return super().identity + (
+        self.through,
+        self.through_fields,  # <-- This is the problem line (line 313)
+        self.db_constraint,
+    )
+```
+
+This matches perfectly with my analysis and the problem description:
+
+1. **The Issue**: Line 313 contains `self.through_fields,` which can be a list (like `['child', 'parent']` from the problem description)
+2. **The Error**: When this list is included in the identity tuple and later hashed in the `__hash__` method at line 139, it causes `TypeError: unhashable type: 'list'`
+3. **The Solution**: Line 313 needs to be changed from `self.through_fields,` to `make_hashable(self.through_fields),`
+4. **The Import**: I confirmed earlier that `make_hashable` is already imported at line 14
+5. **The Pattern**: This follows the same pattern used for `self.limit_choices_to` at line 126 in the parent class
+
+The location is ready for fixing. The fix is straightforward and follows established patterns in the codebase.
+
+**CONTINUE TO FIX**
+================================ Human Message =================================
+
+[Location 1] /root/hy/projects_4/django/django/db/models/fields/reverse_related.py lines 309-315
+
+Imports in this file: You can select the functions that may be needed to assist with the repair.
+  from django.core import exceptions
+  from django.utils.functional import cached_property
+  from django.utils.hashable import make_hashable
+  from . import BLANK_CHOICE_DASH
+  from .mixins import FieldCacheMixin
+
+When generating patches, **do NOT add duplicate imports** that already exist in the above list.
+
+The following is the code content with context ([R] marks vulnerability lines, [C] marks context lines):
+------------------------------------------------------------------------------------------------
+[C]  299:             raise ValueError("Can't supply a through model and db_constraint=False")
+[C]  300:         self.through = through
+[C]  301: 
+[C]  302:         if through_fields and not through:
+[C]  303:             raise ValueError("Cannot specify through_fields without a through model")
+[C]  304:         self.through_fields = through_fields
+[C]  305: 
+[C]  306:         self.symmetrical = symmetrical
+[C]  307:         self.db_constraint = db_constraint
+[C]  308: 
+[R]  309:     @property
+[R]  310:     def identity(self):
+[R]  311:         return super().identity + (
+[R]  312:             self.through,
+[R]  313:             self.through_fields,
+[R]  314:             self.db_constraint,
+[R]  315:         )
+[C]  316: 
+[C]  317:     def get_related_field(self):
+[C]  318:         """
+[C]  319:         Return the field in the 'to' object to which this relationship is tied.
+[C]  320:         Provided for symmetry with ManyToOneRel.
+[C]  321:         """
+[C]  322:         opts = self.through._meta
+[C]  323:         if self.through_fields:
+[C]  324:             field = opts.get_field(self.through_fields[0])
+[C]  325:         else:
+
+You must pay close attention to **indentation** — especially the relative indentation level between the patch and its parent scope (for example, the containing class or function).
+⚠️ **Observe the leading whitespace of the content above** and indent your patch to match its context; do not always produce flush-left code.
+⚠️ **Do not combine fixes for different locations into one block** — every location's fix should be in a **separate** ```python```code block.
+
+Here are the suggestions from the Suggester:
+#REFLECT
+
+Perfect! Now I have the complete context. The problem statement confirms exactly what I found in my analysis:
+
+1. **Root Cause**: The `ManyToManyRel.identity` property includes `self.through_fields` directly without wrapping it with `make_hashable()`. When `through_fields` is a list (like `['child', 'parent']` in the example), it causes a `TypeError: unhashable type: 'list'` when the `__hash__` method tries to hash the identity tuple.
+
+2. **Error Location**: Line 140 in `/root/hy/projects_4/django/django/db/models/fields/reverse_related.py` where `return hash(self.identity)` fails.
+
+3. **Bug Location**: Lines 309-315 in the `ManyToManyRel.identity` property where `self.through_fields` is included without `make_hashable()`.
+
+4. **Solution**: Change line 313 from `self.through_fields,` to `make_hashable(self.through_fields),`
+
+The suspicious location provided (lines 309-315) matches exactly with my analysis. This is the `identity` property of `ManyToManyRel` class where the fix needs to be applied.
+
+S
+
+1. **Line 313 in ManyToManyRel.identity property**: Change `self.through_fields,` to `make_hashable(self.through_fields),` to ensure that when `through_fields` is a list (like `['child', 'parent']`), it gets converted to a hashable tuple before being included in the identity tuple. This follows the same pattern already used for `self.limit_choices_to` at line 126 in the parent class and will prevent the `TypeError: unhashable type: 'list'` when the `__hash__` method at line 139 tries to hash the identity.
+
+You may search or reference other code if necessary.
+
+**When you're ready, start your reply with '#PROPOSE PATCH' and then include all  code blocks.**
+#PROPOSE PATCH
+```python
+<patch_1>
+```
+```python
+<patch_2>
+```
+...
+
+
+
+2025-10-08 17:20:03 - INFO - ================================== Ai Message ==================================
+Name: Fixer
+
+#PROPOSE PATCH
+
+Based on my analysis of the bug, the issue is that `self.through_fields` can be a list (like `['child', 'parent']` in the problem description), which is unhashable. When the `__hash__` method tries to hash the identity tuple containing this list, it raises a `TypeError: unhashable type: 'list'`.
+
+The fix is to wrap `self.through_fields` with `make_hashable()` to convert it to a hashable tuple before including it in the identity tuple. This follows the same pattern already used for `self.limit_choices_to` in the parent class.
+
+```python
+    @property
+    def identity(self):
+        return super().identity + (
+            self.through,
+            make_hashable(self.through_fields),
+            self.db_constraint,
+        )
+```
+
+
+2025-10-08 17:20:26 - INFO - ================================ Remove Message ================================
+
+
+
+
