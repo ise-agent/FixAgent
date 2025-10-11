@@ -11,10 +11,10 @@ from tqdm import tqdm
 from pygments.lexers import guess_lexer_for_filename
 from pygments.token import Token
 from pygments.util import ClassNotFound
-from tree_sitter_languages import get_language, get_parser
+from tree_sitter import Language, Parser
+from tree_sitter_language_pack import get_language as get_ts_language
 from grep_ast import filename_to_lang
-
-from utils import create_structure
+from kg.utils import create_structure
 
 # Suppress tree-sitter future warnings
 warnings.simplefilter("ignore", category=FutureWarning)
@@ -23,16 +23,16 @@ warnings.simplefilter("ignore", category=FutureWarning)
 Tag = namedtuple("Tag", "rel_fname fname line name kind category info")
 
 class CodeGraph:
-    def __init__(self, root=None):
+    def __init__(self, root=None, structure=None):
         if not root:
             root = os.getcwd()
         self.root = root
 
-        # Build repository structure and dump to kg.json
-        self.structure = create_structure(self.root)
-        kg_path = Path(__file__).resolve().parent / "kg.json"
-        with open(kg_path, 'w', encoding='utf-8') as f:
-            json.dump(self.structure, f, indent=4)
+        # Use provided structure or build new one (no longer dump to kg.json)
+        if structure is not None:
+            self.structure = structure
+        else:
+            self.structure = create_structure(self.root)
 
         # Ensure structure is wrapped under root folder name
         if not isinstance(self.structure, dict) or os.path.basename(self.root) not in self.structure:
@@ -97,12 +97,21 @@ class CodeGraph:
 
         lines = code.splitlines()
 
-        # Parse with tree-sitter
-        lang = filename_to_lang(fname)
-        if not lang:
+        # Parse with tree-sitter (with error handling for compatibility issues)
+        try:
+            lang = filename_to_lang(fname)
+            if not lang:
+                return
+
+            # Get language and create parser
+            ts_lang = get_ts_language(lang)
+            parser = Parser(ts_lang)
+            tree = parser.parse(code.encode('utf-8'))
+        except (TypeError, Exception) as e:
+            # tree-sitter library compatibility issue, skip tree-sitter parsing
+            # This means CALLS and REFERENCES relations won't be available
+            print(f"Warning: tree-sitter parsing failed for {fname}: {e}")
             return
-        parser = get_parser(lang)
-        tree = parser.parse(code.encode('utf-8'))
 
         # AST fallback for source info
         try:
@@ -117,27 +126,34 @@ class CodeGraph:
             std_funcs, std_libs = [], []
 
         # Capture definitions and references
-        query = get_language(lang).query("""
-            (class_definition name: (identifier) @name.definition.class)
-            (function_definition name: (identifier) @name.definition.function)
-            (call function: [(identifier) @name.reference.call
-                              (attribute attribute: (identifier) @name.reference.call)])
-        """)
-        captures = query.captures(tree.root_node)
+        try:
+            query = ts_lang.query("""
+                (class_definition name: (identifier) @name.definition.class)
+                (function_definition name: (identifier) @name.definition.function)
+                (call function: [(identifier) @name.reference.call
+                                  (attribute attribute: (identifier) @name.reference.call)])
+            """)
+            captures = query.captures(tree.root_node)
+        except Exception as e:
+            print(f"Warning: query failed for {fname}: {e}")
+            return
 
         saw = set()
-        for node, tag in captures:
-            kind = 'def' if 'definition' in tag else 'ref'
+        # captures is a dict: {capture_name: [nodes]}
+        for capture_name, nodes in captures.items():
+            kind = 'def' if 'definition' in capture_name else 'ref'
             saw.add(kind)
-            name = node.text.decode('utf-8')
-            if name in std_funcs or name in std_libs or name in dir(builtins):
-                continue
 
-            category = 'class' if 'class ' in lines[node.start_point[0]] else 'function'
-            info = ''
-            line_nums = [node.start_point[0], node.end_point[0]]
+            for node in nodes:
+                name = node.text.decode('utf-8')
+                if name in std_funcs or name in std_libs or name in dir(builtins):
+                    continue
 
-            yield Tag(rel_fname, fname, line_nums, name, kind, category, info)
+                category = 'class' if 'class' in capture_name else 'function'
+                info = ''
+                line_nums = [node.start_point.row, node.end_point.row]
+
+                yield Tag(rel_fname, fname, line_nums, name, kind, category, info)
 
         # Fallback: if no definitions found but refs exist, or vice versa, skip
         if 'ref' in saw or 'def' not in saw:
@@ -165,15 +181,27 @@ class CodeGraph:
     def find_files(self, paths):
         py_files = []
         for path in paths:
-            if os.path.isdir(path):
-                py_files.extend(self.find_src_files(path))
-            elif path.endswith('.py'):
-                py_files.append(path)
+            # 确保 path 是字符串
+            path_str = str(path)
+            if os.path.isdir(path_str):
+                py_files.extend(self.find_src_files(path_str))
+            elif path_str.endswith('.py'):
+                py_files.append(path_str)
         return py_files
 
 
-def run(dir_name: str):
-    cg = CodeGraph(root=dir_name)
+def run(dir_name: str, structure=None):
+    """
+    构建 tags 数据，不再写入 tags.json，直接返回 tags 列表
+
+    Args:
+        dir_name: 项目目录
+        structure: 可选的预构建的结构数据
+
+    Returns:
+        tuple: (structure, all_tags) - 结构数据和标签列表
+    """
+    cg = CodeGraph(root=dir_name, structure=structure)
     py_files = cg.find_files([dir_name])
 
     def collect_tags(fname):
@@ -188,22 +216,8 @@ def run(dir_name: str):
         except Exception as e:
             print(f"Error on {f}: {e}")
 
-    out_path = Path(__file__).resolve().parent / "tags.json"
-    if out_path.exists():
-        out_path.unlink()
-    with open(out_path, 'w', encoding='utf-8') as f:
-        for tag in all_tags:
-            json.dump({
-                'fname': tag.fname,
-                'rel_fname': tag.rel_fname,
-                'line': tag.line,
-                'name': tag.name,
-                'kind': tag.kind,
-                'category': tag.category,
-                'info': tag.info,
-            }, f, ensure_ascii=False)
-            f.write('\n')
-    print(f"🚀 Successfully generated kg.json and tags.json in {Path(dir_name).resolve()}")
+    print(f"🚀 Successfully constructed structure and tags for {Path(dir_name).resolve()}")
+    return cg.structure, all_tags
 
 if __name__ == '__main__':
     import sys

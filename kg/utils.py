@@ -7,8 +7,19 @@ from lib2to3.refactor import RefactoringTool, get_fixers_from_package
 from pathlib import Path
 import sys
 sys.path.append(str(Path(__file__).resolve().parent.parent))
-from constants import *
-PREFIX  = Path(TEST_BED)/PROJECT_NAME
+
+try:
+    from settings import settings
+    # 使用 settings 中的配置（如果可用）
+    TEST_BED = settings.TEST_BED
+    PROJECT_NAME = settings.PROJECT_NAME
+    PREFIX = Path(TEST_BED) / PROJECT_NAME
+except ImportError:
+    # 如果 settings 不可用，使用默认值
+    TEST_BED = None
+    PROJECT_NAME = None
+    PREFIX = None
+
 fixer_tool = RefactoringTool(get_fixers_from_package('lib2to3.fixes'))
 def try_parse_with_2to3(src: str):
     tree = None
@@ -77,7 +88,7 @@ class SimpleClassVisitor(ast.NodeVisitor):
             "absolute_path": self.file_path,
             "start_line": node.lineno,
             "end_line": node.end_lineno,
-            "content": self.file_content.splitlines()[node.lineno-1:node.end_lineno],
+            "content": "\n".join(self.file_content.splitlines()[node.lineno-1:node.end_lineno]),
             "class_type": "inner" if len(self.class_stack)>1 else "normal",
             "parent_class": parent_fqn,
             "methods": func_vis.functions,
@@ -120,7 +131,7 @@ class ConstantVisitor(ast.NodeVisitor):
         except Exception:
             data_type = ast.unparse(node.value).strip()
         fqn = ".".join(self.module_prefix.split(".") + self.class_stack + [target.id])
-        content = self.file_content.splitlines()[node.lineno-1:node.end_lineno]
+        content = "\n".join(self.file_content.splitlines()[node.lineno-1:node.end_lineno])
         self.constants.append({
             "name": target.id,
             "full_qualified_name": fqn,
@@ -167,7 +178,7 @@ class FunctionVisitor(ast.NodeVisitor):
             "absolute_path": self.file_path,
             "start_line": node.lineno,
             "end_line": node.end_lineno,
-            "content": self.file_content.splitlines()[node.lineno-1:node.end_lineno],
+            "content": "\n".join(self.file_content.splitlines()[node.lineno-1:node.end_lineno]),
             "params": params,
             "modifiers": modifiers + [access],
             "signature": f"def {node.name}({signature})",
@@ -263,6 +274,9 @@ def parse_python_file(
 
 
 def create_structure(directory_path: str) -> Dict:
+    """
+    创建代码结构，不再写入 kg.json，直接返回数据结构
+    """
     global project_root, project_root_name
     project_root = os.path.abspath(directory_path)
     project_root_name = os.path.basename(project_root)
@@ -285,10 +299,20 @@ def create_structure(directory_path: str) -> Dict:
             full = os.path.join(root, fn)
             if fn.endswith(".py"):
                 abs_py = Path(full).resolve()
-                try:
-                    rel_path = abs_py.relative_to(PREFIX.resolve())
-                except ValueError:
-                    rel_path = abs_py
+
+                # 如果 PREFIX 未设置，使用项目根目录作为前缀
+                if PREFIX is not None:
+                    try:
+                        rel_path = abs_py.relative_to(PREFIX.resolve())
+                    except ValueError:
+                        rel_path = abs_py
+                else:
+                    # 使用相对于项目根的路径
+                    try:
+                        rel_path = abs_py.relative_to(Path(project_root).resolve())
+                    except ValueError:
+                        rel_path = Path(abs_py.name)
+
                 rel_no_ext = rel_path.with_suffix('')
                 mod_pref = ".".join(rel_no_ext.as_posix().lstrip(os.sep).split(os.sep))
 

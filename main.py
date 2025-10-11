@@ -12,7 +12,7 @@ from langchain_core.messages import HumanMessage
 from prompt import locator_template, suggester_template, fixer_template
 from workflow.graph import create_workflow
 from router.router import is_tool_result_message
-from script.reset import update_database_in_conf, restart_neo4j,checkout_to_base_commit
+from script.reset import checkout_to_base_commit
 from utils.logging import set_api_stats_file
 from utils.logger import Logger
 from settings import settings
@@ -29,6 +29,7 @@ def _get_problem_statement_by_instance_id(id):
 
 # 检查是否禁用知识图谱
 DISABLE_KG = os.environ.get('DISABLE_KG', '').lower() == 'true'
+print(f"DISABLE_KG is set to {DISABLE_KG}")
 MODEL_TYPE = settings.openai_model or "claude-sonnet-4-20250514"
 ROUND = settings.ROUND
 
@@ -45,12 +46,16 @@ print(f"{INSTANCE_ID}")
 print(f"DISABLE_KG: {DISABLE_KG}")
 print("=============================")
 # No external dependencies needed - using internal Logger
+print("========================")
+print(settings.openai_api_key)
+print("========================")
 
 llm = ChatOpenAI(
     model=MODEL_TYPE,
     temperature=0.0,
     api_key=settings.openai_api_key,
     base_url=settings.openai_base_url,
+    extra_body={"enable_thinking": False},
 )
 
 # Setup logging
@@ -113,14 +118,10 @@ def get_default_tools():
 def main():
     print("Starting ISEA")
     print("-" * 60)
-    # TODO @<hanyu> 调整位置
     dir_name = Path(TEST_BED)/PROJECT_NAME
     checkout_to_base_commit(INSTANCE_ID, dir_name)
 
-    # 只在不禁用知识图谱时执行知识图谱相关操作
-    if not DISABLE_KG:
-        update_database_in_conf(INSTANCE_ID)
-        restart_neo4j()
+    # 不再需要 Neo4j 相关操作，知识图谱在 retriever_tools.py 中按需构建
 
 
     # Get tools

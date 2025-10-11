@@ -8,9 +8,11 @@ class Settings(BaseSettings):
     """Configuration settings with support for environment variables."""
 
     # LLM API Settings
-    openai_api_key: str = Field(default="sk-NdZukOuQQRhydvPW33Dc1e05AbCa4fE394BfD3FfB9Ac09Be", env="OPENAI_API_KEY")
-    openai_base_url: str = Field(default="https://api.holdai.top/v1", env="OPENAI_BASE_URL")
-    openai_model: str = Field(default="claude-sonnet-4-20250514", env="OPENAI_MODEL")
+    # openai_api_key: str = Field(default="sk-NdZukOuQQRhydvPW33Dc1e05AbCa4fE394BfD3FfB9Ac09Be", env="OPENAI_API_KEY")
+    # openai_base_url: str = Field(default="https://api.holdai.top/v1", env="OPENAI_BASE_URL")
+    openai_api_key: str = Field(default="sk-e346078d76f546c2ab04f0f008126a91", env="OPENAI_API_KEY")
+    openai_base_url: str = Field(default="https://dashscope.aliyuncs.com/compatible-mode/v1", env="OPENAI_BASE_URL")
+    openai_model: str = Field(default="deepseek-v3", env="OPENAI_MODEL")
 
     claude_api_key: str = Field(default="", env="CLAUDE_API_KEY")
     claude_base_url: str = Field(default="", env="CLAUDE_BASE_URL")
@@ -25,9 +27,9 @@ class Settings(BaseSettings):
     neo4j_password: str = Field(default="12345678", env="NEO4J_PASSWORD")
 
     # Project Settings
-    TEST_BED: str = Field(default="/root/hy/projects", env="TEST_BED")
-    PROJECT_NAME: str = Field(default="sympy", env="PROJECT_NAME")
-    INSTANCE_ID: str = Field(default="sympy__sympy-13798", env="INSTANCE_ID")
+    TEST_BED: str = Field(default="", env="TEST_BED")
+    PROJECT_NAME: str = Field(default="", env="PROJECT_NAME")
+    INSTANCE_ID: str = Field(default="", env="INSTANCE_ID")
     PROBLEM_STATEMENT: str = Field(default="Find and fix bugs in the project", env="PROBLEM_STATEMENT")
 
 

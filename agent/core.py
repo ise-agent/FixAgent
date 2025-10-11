@@ -57,18 +57,20 @@ def create_agent(
     prompt = prompt.partial(base_dir=base_dir)
     return prompt | llm
 
-
+#TODO @<hanyu> 手动
 zero_llm = ChatOpenAI(
     model=model_type,
     temperature=0.8,
     api_key=settings.openai_api_key,
     base_url=settings.openai_base_url,
+    extra_body={"enable_thinking": False},
 )
 eighty_llm = ChatOpenAI(
     model=model_type,
     temperature=0.8,
     api_key=settings.openai_api_key,
     base_url=settings.openai_base_url,
+    extra_body={"enable_thinking": False},
 )
 
 

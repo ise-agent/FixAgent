@@ -2,6 +2,7 @@
 import os
 import re
 from typing import Optional
+from pathlib import Path
 
 from retriever.ckg_retriever import CKGRetriever
 from settings import settings
@@ -15,14 +16,14 @@ _retriever: Optional[CKGRetriever] = None
 
 
 def get_retriever() -> CKGRetriever:
-    """Get or create the global CKGRetriever instance"""
+    """Get or create the global CKGRetriever instance (memory-based)"""
     global _retriever
     if _retriever is None:
-        _retriever = CKGRetriever(
-            settings.neo4j_uri,
-            settings.neo4j_user,
-            settings.neo4j_password
-        )
+        # 构建内存版知识图谱
+        from kg.main import build_knowledge_graph
+        dir_name = Path(settings.TEST_BED) / settings.PROJECT_NAME
+        print(f"Building knowledge graph for {dir_name}...")
+        _retriever = build_knowledge_graph(dir_name)
     return _retriever
 
 graph_retriever = get_retriever()
