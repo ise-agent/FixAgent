@@ -47,6 +47,10 @@ class CKGRetriever:
         self.file_intervals: Dict[str, List[Tuple[int, int, str, str, str]]] = defaultdict(list)
         # (absolute_path) -> [(start_line, end_line, fqn, label, name)]
 
+        # 预计算的 CALLS 和 REFERENCES 索引
+        self.calls_index: Dict[str, List[dict]] = defaultdict(list)  # caller_fqn -> [callee_info]
+        self.references_index: Dict[str, List[dict]] = defaultdict(list)  # referrer_fqn -> [referenced_class_info]
+
         # 构建索引
         self._build_indexes()
 
@@ -57,6 +61,57 @@ class CKGRetriever:
         # 对每个文件的 intervals 排序
         for path in self.file_intervals:
             self.file_intervals[path].sort(key=lambda t: t[0])
+
+        # 预计算 CALLS 和 REFERENCES 索引
+        self._build_calls_references_index()
+
+    def _build_calls_references_index(self):
+        """
+        一次性遍历所有 tags，构建 CALLS 和 REFERENCES 反向索引
+        这样后续查询时无需重复遍历 tags
+        """
+        print(f"Building calls/references index from {len(self.tags)} tags...")
+
+        for tag in self.tags:
+            if tag.kind != "ref":
+                continue
+
+            # 获取引用位置的文件名和行号
+            fname = tag.fname or tag.rel_fname
+            line_val = tag.line
+            if isinstance(line_val, list) and line_val:
+                line_no = int(line_val[0])
+            elif isinstance(line_val, int):
+                line_no = line_val
+            else:
+                continue
+
+            name = tag.name
+            category = (tag.category or "").lower()
+
+            # 找到引用的源容器（调用者）
+            src = self._find_container(fname, line_no)
+            if not src:
+                continue
+            src_fqn, src_label = src
+
+            # 根据 category 查找目标并建立索引
+            if category == "function":
+                # CALLS 关系：函数调用
+                candidates = self.methods_by_name.get(name, [])
+                if len(candidates) == 1:
+                    callee_info = self._entity_to_dict(candidates[0])
+                    self.calls_index[src_fqn].append(callee_info)
+            elif category == "class":
+                # REFERENCES 关系：类引用
+                candidates = self.classes_by_name.get(name, [])
+                if len(candidates) == 1:
+                    class_info = self._entity_to_dict(candidates[0])
+                    self.references_index[src_fqn].append(class_info)
+
+        print(f"Index built: {len(self.calls_index)} entities with calls, "
+              f"{len(self.references_index)} entities with references")
+
 
     def _process_structure(self, structure, current_path=None):
         """递归处理 structure，提取所有实体"""
@@ -298,52 +353,14 @@ class CKGRetriever:
 
     def _compute_calls_and_references(self, file: str, full_qualified_name: str) -> Tuple[List[dict], List[dict]]:
         """
-        从 tags 动态计算 CALLS 和 REFERENCES 关系
+        从预计算的索引中获取 CALLS 和 REFERENCES 关系
 
         Returns:
             (calls, references) - 两个列表
         """
-        calls = []
-        references = []
-
-        # 遍历 tags，找到所有引用
-        for tag in self.tags:
-            if tag.kind != "ref":
-                continue
-
-            fname = tag.fname or tag.rel_fname
-            line_val = tag.line
-            if isinstance(line_val, list) and line_val:
-                line_no = int(line_val[0])
-            elif isinstance(line_val, int):
-                line_no = line_val
-            else:
-                continue
-
-            name = tag.name
-            category = (tag.category or "").lower()
-
-            # 找到引用的源容器
-            src = self._find_container(fname, line_no)
-            if not src:
-                continue
-            src_fqn, src_label = src
-
-            # 只处理源是当前目标实体的引用
-            if src_fqn != full_qualified_name:
-                continue
-
-            # 根据 category 查找目标
-            if category == "function":
-                # CALLS 关系
-                candidates = self.methods_by_name.get(name, [])
-                if len(candidates) == 1:
-                    calls.append(self._entity_to_dict(candidates[0]))
-            elif category == "class":
-                # REFERENCES 关系
-                candidates = self.classes_by_name.get(name, [])
-                if len(candidates) == 1:
-                    references.append(self._entity_to_dict(candidates[0]))
+        # 直接从索引中获取，O(1) 复杂度
+        calls = self.calls_index.get(full_qualified_name, [])
+        references = self.references_index.get(full_qualified_name, [])
 
         return calls, references
 

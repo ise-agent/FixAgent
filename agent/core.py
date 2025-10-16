@@ -5,7 +5,6 @@ import re
 import uuid
 import subprocess
 import os
-from datetime import datetime
 from settings import settings
 from agent.state import AgentState
 from prompt import ANALYZE_PROMPT
@@ -22,6 +21,7 @@ from collections import defaultdict
 from pydantic import BaseModel, Field
 from utils import record_api_call, process_patch
 from pathlib import Path
+from utils.logger import Logger
 
 INSTANCE_ID = settings.INSTANCE_ID
 PROJECT_NAME = settings.PROJECT_NAME
@@ -33,6 +33,9 @@ res_json = {"location": [], "failed_patch": []}
 logs_dir = Path(__file__).parent.parent / "logs"
 timestamp = settings.timestamp
 res_dir = logs_dir / ROUND / f"{INSTANCE_ID}_{timestamp}.json"
+
+# Create logger instance for agent module
+agent_logger = Logger(logs_dir / ROUND, f"{INSTANCE_ID}_{timestamp}.log")
 
 
 class Location(BaseModel):
@@ -57,7 +60,8 @@ def create_agent(
     prompt = prompt.partial(base_dir=base_dir)
     return prompt | llm
 
-#TODO @<hanyu> 手动
+
+# TODO @<hanyu> 手动
 zero_llm = ChatOpenAI(
     model=model_type,
     temperature=0.8,
@@ -92,11 +96,18 @@ def agent_node(state: AgentState, agent, name, model_type):
         return {"messages": []}
     if is_tool_result_message(state["messages"][-1]) and name != "Fixer":
         state["messages"] = state["messages"] + [HumanMessage(content=ANALYZE_PROMPT)]
-    state["messages"] = state["messages"] + [
-        HumanMessage(
-            content=f"The problem statement the project is:\n{state['problem_statement']}"
-        )
-    ]
+
+    # Only add problem statement if not already in recent messages (avoid duplication)
+    recent_has_problem_statement = any(
+        isinstance(msg, HumanMessage) and "The problem statement the project is:" in str(msg.content)
+        for msg in state["messages"][-5:] if hasattr(msg, 'content')
+    )
+    if not recent_has_problem_statement:
+        state["messages"] = state["messages"] + [
+            HumanMessage(
+                content=f"The problem statement the project is:\n{state['problem_statement']}"
+            )
+        ]
     if name == "Fixer":
         for idx, loc in enumerate(state["locations"]):
             with open(loc["file_path"], "r", encoding="utf-8") as file:
@@ -183,7 +194,24 @@ def agent_node(state: AgentState, agent, name, model_type):
         messages = state["messages"]
 
     state["messages"] = messages
-    result = agent.invoke(state)
+
+    # Add detailed error handling for API calls
+    try:
+        result = agent.invoke(state)
+    except Exception as api_error:
+        import traceback
+        error_details = traceback.format_exc()
+        agent_logger.error("=" * 80)
+        agent_logger.error(f"⚠️ API CALL FAILED - Agent: {name}")
+        agent_logger.error("=" * 80)
+        agent_logger.error(f"Error Type: {type(api_error).__name__}")
+        agent_logger.error(f"Error Message: {str(api_error)}")
+        agent_logger.error("-" * 80)
+        agent_logger.error("Full Traceback:")
+        agent_logger.error(error_details)
+        agent_logger.error("=" * 80)
+        raise  # Re-raise the exception after logging
+
 
     try:
         prompt_content = "\n".join(
@@ -250,34 +278,74 @@ def agent_node(state: AgentState, agent, name, model_type):
                         }
                     )
 
-            except Exception:
+            except Exception as e:
                 # JSON parsing failed: prompt the model to re-output valid JSON schema
-                err = (
-                    "⚠️ Your JSON is invalid or Your file_path is wrong. Please output exactly a JSON object following this schema:\n"
-                    + """
+                agent_logger.error("=" * 80)
+                agent_logger.error("⚠️ JSON PARSING FAILED - DEBUG INFO:")
+                agent_logger.error("=" * 80)
+                agent_logger.error(f"Exception: {type(e).__name__}: {str(e)}")
+                agent_logger.error("-" * 80)
+                agent_logger.error("AI Response Content:")
+                agent_logger.error("-" * 80)
+                agent_logger.error(result.content)
+                agent_logger.error("=" * 80)
+
+                # 🔧 SOLUTION 1: Check if Agent is trying to call a tool (indicated by #TOOL_CALL)
+                if "#TOOL_CALL" in result.content:
+                    # Agent wants to explore first - allow it!
+                    # Don't replace the message, just keep ready_to_locate True
+                    # and let the tool call execute normally
+                    agent_logger.info("✓ Agent wants to explore before providing JSON - allowing tool call")
+                    state["ready_to_locate"] = True  # Keep state for later
+                    # Don't modify res - let the original AIMessage with tool call through
+                    # The tool will be executed in the next step, and after that,
+                    # Agent will have the information needed to provide valid JSON
+                else:
+                    # Agent provided invalid JSON without tool call - give feedback
+                    # Check if this is a file not found error
+                    is_file_not_found = isinstance(e, FileNotFoundError)
+
+                    if is_file_not_found:
+                        # Extract the problematic file path from the error
+                        error_msg = str(e)
+                        err = (
+                            f"⚠️ ERROR: One or more file paths in your JSON do not exist.\n\n"
+                            f"Details: {error_msg}\n\n"
+                            "**IMPORTANT**: You must provide ABSOLUTE file paths that actually exist in the project.\n\n"
+                            "**DO NOT GUESS file paths!** Instead:\n"
+                            "1. Use #TOOL_CALL explore_directory or #TOOL_CALL search_code_with_context to find the correct files\n"
+                            "2. Verify the exact absolute paths before outputting JSON\n"
+                            "3. Ensure all paths start with the project root (e.g., /Users/hanyu/projects_2/django/...)\n\n"
+                            "Please search for the correct file locations first, then provide valid JSON with VERIFIED absolute paths."
+                        )
+                    else:
+                        # Generic JSON error
+                        err = (
+                            f"⚠️ JSON parsing failed: {type(e).__name__}: {str(e)}\n\n"
+                            "Please output exactly a JSON object following this schema:\n"
+                            + """
 ```json
 {
     "locations": [
         {
-            "file_path": "/root/hy/projects/sphinx/sphinx/ext/viewcode.py",
+            "file_path": "/absolute/path/to/file.py",
             "start_line": 181,
             "end_line": 276
-        },
-        {
-            "file_path": "/root/hy/projects/sphinx/sphinx/ext/viewcode.py",
-            "start_line": 160,
-            "end_line": 178
         }
     ]
 }
 ```
-                    """
-                    + "\n or check if the file path is an absolute path."
-                )
-                res = [HumanMessage(content=err)]
-                # Keep ready_to_locate True to allow retry
-                state["ready_to_locate"] = True
-                state["update_num"] = 2
+"""
+                            + "\nEnsure:\n"
+                            "- All file_path values are ABSOLUTE paths\n"
+                            "- All files actually exist in the project\n"
+                            "- start_line and end_line are valid integers"
+                        )
+
+                    res = [HumanMessage(content=err)]
+                    # Keep ready_to_locate True to allow retry
+                    state["ready_to_locate"] = True
+                    state["update_num"] = 2
             else:
                 # Successfully parsed locations
                 state["ready_to_locate"] = False
@@ -287,6 +355,7 @@ def agent_node(state: AgentState, agent, name, model_type):
         ## to be continued
         if (
             "INFO ENOUGH" in result.content
+            and "PROPOSE LOCATION" not in result.content
             and name == "Locator"
             and "#TOOL_CALL" not in result.content
         ):
@@ -299,6 +368,7 @@ def agent_node(state: AgentState, agent, name, model_type):
             state["update_num"] = 2
         if (
             "INFO ENOUGH" in result.content
+            and "PROPOSE SUGGESTION" not in result.content
             and name == "Suggester"
             and "#TOOL_CALL" not in result.content
         ):

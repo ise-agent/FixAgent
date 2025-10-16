@@ -50,13 +50,13 @@ def run_instance(instance_id, index, total):
     env["PROJECT_NAME"] = base_package
 
     # TODO @<hanyu> 手动
-    if round_value == "deepseek_v3_round_c_1":
+    if round_value == "deepseek-v3_round_c_1":
         env["TEST_BED"] = "/Users/hanyu/projects_1"
-    elif round_value == "deepseek_v3_round_c_2":
+    elif round_value == "deepseek-v3_round_c_2":
         env["TEST_BED"] = "/Users/hanyu/projects_2"
-    elif round_value == "deepseek_v3_round_c_3":
+    elif round_value == "deepseek-v3_round_c_3":
         env["TEST_BED"] = "/Users/hanyu/projects_3"
-    elif round_value == "deepseek_v3_round_c_4":
+    elif round_value == "deepseek-v3_round_c_4":
         env["TEST_BED"] = "/Users/hanyu/projects_4"
     else:
         env["TEST_BED"] = "/Users/hanyu/projects"  # 默认目录
@@ -95,13 +95,13 @@ def main():
 
     # Determine pending file based on ROUND
     # TODO @<hanyu> 手动
-    if round_value == "deepseek_v3_round_c_1":
+    if round_value == "deepseek-v3_round_c_1":
         pending_file = Path("pending_1.txt")
-    elif round_value == "deepseek_v3_round_c_2":
+    elif round_value == "deepseek-v3_round_c_2":
         pending_file = Path("pending_2.txt")
-    elif round_value == "deepseek_v3_round_c_3":
+    elif round_value == "deepseek-v3_round_c_3":
         pending_file = Path("pending_3.txt")
-    elif round_value == "deepseek_v3_round_c_4":
+    elif round_value == "deepseek-v3_round_c_4":
         pending_file = Path("pending_4.txt")
     else:
         pending_file = Path("pending.txt")  # fallback to default

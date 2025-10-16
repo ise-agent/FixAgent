@@ -8,7 +8,7 @@ if ! command -v tmux &> /dev/null; then
     exit 1
 fi
 
-SESSION_NAME="deepseek_v3"
+SESSION_NAME="ds"
 
 # Check if session already exists and kill it if it does
 if tmux has-session -t $SESSION_NAME 2>/dev/null; then
@@ -22,24 +22,24 @@ tmux new-session -d -s $SESSION_NAME
 
 # Create windows for each ROUND setting
 tmux new-window -t $SESSION_NAME:1 -n round1
-# tmux new-window -t $SESSION_NAME:2 -n round2
-# tmux new-window -t $SESSION_NAME:3 -n round3
-# tmux new-window -t $SESSION_NAME:4 -n round4
+tmux new-window -t $SESSION_NAME:2 -n round2
+tmux new-window -t $SESSION_NAME:3 -n round3
+tmux new-window -t $SESSION_NAME:4 -n round4
 
 # Send commands to each window
 echo "Setting up ablation study in tmux session: $SESSION_NAME"
 
 # Round 1
-tmux send-keys -t $SESSION_NAME:1 "echo 'Starting ablation study - Round 1'; DISABLE_KG=false ROUND=deepseek_v3_round_c_1 uv run run_ablation.py" Enter
+tmux send-keys -t $SESSION_NAME:1 "echo 'Starting ablation study - Round 1'; DISABLE_KG=true ROUND=deepseek-v3_round_c_1 uv run run_ablation.py" Enter
 
-# # Round 2
-# tmux send-keys -t $SESSION_NAME:2 "echo 'Starting ablation study - Round 2'; DISABLE_KG=false ROUND=deepseek_v3_round_c_2 uv run run_ablation.py" Enter
+# Round 2
+tmux send-keys -t $SESSION_NAME:2 "echo 'Starting ablation study - Round 2'; DISABLE_KG=true ROUND=deepseek-v3_round_c_2 uv run run_ablation.py" Enter
 
-# # Round 3
-# tmux send-keys -t $SESSION_NAME:3 "echo 'Starting ablation study - Round 3'; DISABLE_KG=false ROUND=deepseek_v3_round_c_3 uv run run_ablation.py" Enter
+# Round 3
+tmux send-keys -t $SESSION_NAME:3 "echo 'Starting ablation study - Round 3'; DISABLE_KG=true ROUND=deepseek-v3_round_c_3 uv run run_ablation.py" Enter
 
-# # Round 4
-# tmux send-keys -t $SESSION_NAME:4 "echo 'Starting ablation study - Round 4'; DISABLE_KG=false ROUND=deepseek_v3_round_c_4 uv run run_ablation.py" Enter
+# Round 4
+tmux send-keys -t $SESSION_NAME:4 "echo 'Starting ablation study - Round 4'; DISABLE_KG=true ROUND=deepseek-v3_round_c_4 uv run run_ablation.py" Enter
 
 echo "Ablation study started in tmux session '$SESSION_NAME'"
 echo ""

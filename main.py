@@ -29,7 +29,6 @@ def _get_problem_statement_by_instance_id(id):
 
 # 检查是否禁用知识图谱
 DISABLE_KG = os.environ.get('DISABLE_KG', '').lower() == 'true'
-print(f"DISABLE_KG is set to {DISABLE_KG}")
 MODEL_TYPE = settings.openai_model or "claude-sonnet-4-20250514"
 ROUND = settings.ROUND
 
@@ -180,10 +179,19 @@ def main():
 
         for s in events:
             for a in s:
+                # Special handling for summarize node
+                if a == "summarize":
+                    if "summary" in s[a]:
+                        summary_text = s[a]["summary"]
+                        logger.log("info", "=" * 32 + " Summarize " + "=" * 32)
+                        logger.log("info", f"Summary: {summary_text[:500]}..." if len(summary_text) > 500 else f"Summary: {summary_text}")
+                        logger.log("info", "=" * 80 + "\n")
+                    continue
+
                 if "messages" in s[a].keys():
                     results = ""
                     if len(s[a]["messages"]) == 0:
-                        s[a]["messages"] = [""]
+                        continue  # Skip empty message lists
                     if "update_num" in s[a].keys():
                         messages = s[a]["messages"][s[a]["update_num"] * (-1) :]
                     else:
@@ -199,8 +207,6 @@ def main():
                                         print(f"   {message.content}")
                                     else:
                                         message.pretty_print()
-                                else:
-                                    print("=" * 32 + " Summarize " + "=" * 32)
                                 results += buf.getvalue()
 
                     logger.log("info", results + "\n")
@@ -212,8 +218,13 @@ def main():
         
 
     except Exception as e:
+        import traceback
+        error_details = traceback.format_exc()
         print(f"Error during workflow execution: {e}")
-        logger.log("error", f"Workflow execution failed: {e}")
+        print(f"Error type: {type(e).__name__}")
+        print(f"Full traceback:\n{error_details}")
+        logger.log("error", f"Workflow execution failed: {type(e).__name__}: {e}")
+        logger.log("error", f"Full traceback:\n{error_details}")
 
     finally:
         print("ISEA execution completed")
