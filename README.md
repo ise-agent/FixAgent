@@ -1,6 +1,6 @@
-# ISEA (Intelligent Software Engineering Assistant)
+# ISEA (Intelligent Software Engineering Agent)
 
-ISEA is an intelligent software engineering assistant designed to automatically locate, analyze, and fix bugs in Python projects. It uses advanced AI techniques combined with code knowledge graphs to understand complex codebases and generate precise fixes.
+ISEA is an intelligent software engineering agent designed to automatically locate, analyze, and fix bugs in Python projects. It uses advanced AI techniques combined with code knowledge graphs to understand complex codebases and generate precise fixes.
 
 ## Project Structure
 
