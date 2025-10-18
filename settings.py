@@ -10,7 +10,7 @@ class Settings(BaseSettings):
     # LLM API Settings
     # openai_api_key: str = Field(default="sk-NdZukOuQQRhydvPW33Dc1e05AbCa4fE394BfD3FfB9Ac09Be", env="OPENAI_API_KEY")
     # openai_base_url: str = Field(default="https://api.holdai.top/v1", env="OPENAI_BASE_URL")
-    openai_api_key: str = Field(default="sk-e346078d76f546c2ab04f0f008126a91", env="OPENAI_API_KEY")
+    openai_api_key: str = Field(default="", env="OPENAI_API_KEY")
     openai_base_url: str = Field(default="https://dashscope.aliyuncs.com/compatible-mode/v1", env="OPENAI_BASE_URL")
     openai_model: str = Field(default="deepseek-v3", env="OPENAI_MODEL")
 
